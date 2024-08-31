@@ -1,0 +1,27 @@
+The STRM1 first document: ideas to start with and whatnot
+
+Simplistic register-based microprocessor design
+
+ISA planning
+    - Instructions
+        - NOP, because why not
+        - Load value from memory at address of immediate value to specified register
+        - Store value from specified register into memory at address of immediate value
+        - Copy value from specified register to another
+        - Jump in code to address in specified register
+        - Arithmetic and bitwise operations working on specified registers
+
+    - Registers in instructions
+        - In first word of instruction
+        - Two general purpose registers for reading
+        ? Either separate third GPR or one of the two read registers for writing
+
+    - Immediate value
+        - Second word of instruction
+
+Memory and storage
+    - Von Neumann architecture, same memory space for data and code
+    - byte-addressable memory for ease of use
+
+Control
+    - Microcoded control for research and less pain
