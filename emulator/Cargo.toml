@@ -1,0 +1,11 @@
+[package]
+name = "strm1-emulator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+strfmt = "0.2"
+
+byteorder = "1.5"
+bitflags = "2.6"
