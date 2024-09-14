@@ -8,14 +8,10 @@
       <elementAttributes>
         <entry>
           <string>Label</string>
-          <string>MemIn</string>
-        </entry>
-        <entry>
-          <string>Bits</string>
-          <int>16</int>
+          <string>Clk</string>
         </entry>
       </elementAttributes>
-      <pos x="360" y="340"/>
+      <pos x="360" y="260"/>
     </visualElement>
     <visualElement>
       <elementName>Out</elementName>
@@ -50,14 +46,23 @@
       <elementAttributes>
         <entry>
           <string>Label</string>
-          <string>MemReady</string>
+          <string>MemIn</string>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>16</int>
         </entry>
       </elementAttributes>
-      <pos x="360" y="380"/>
+      <pos x="360" y="340"/>
     </visualElement>
     <visualElement>
       <elementName>Register</elementName>
-      <elementAttributes/>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>16</int>
+        </entry>
+      </elementAttributes>
       <pos x="480" y="340"/>
     </visualElement>
     <visualElement>
@@ -79,10 +84,10 @@
       <elementAttributes>
         <entry>
           <string>Label</string>
-          <string>Clk</string>
+          <string>MemReady</string>
         </entry>
       </elementAttributes>
-      <pos x="360" y="260"/>
+      <pos x="360" y="380"/>
     </visualElement>
     <visualElement>
       <elementName>Tunnel</elementName>

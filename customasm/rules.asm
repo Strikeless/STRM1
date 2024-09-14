@@ -16,8 +16,8 @@
 }
 
 #fn instr       (opcode)        => instr_rr(opcode, %0, %0)
-#fn instr_r     (opcode, a)     => instr_rr(opcode,  a, %0)
-#fn instr_rr    (opcode, a, b)  => opcode`6 @ a`4 @ b`4 @ 0`2
+#fn instr_r     (opcode, ra)     => instr_rr(opcode, ra, %0)
+#fn instr_rr    (opcode, ra, rb)  => opcode`6 @ ra`4 @ rb`4 @ 0`2
 
 #subruledef reg {
     %{index: u4} => index
