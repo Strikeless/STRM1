@@ -110,6 +110,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fd119d74b830634cea2a0f58bbd0d54540518a14397557951e79340abc28c0"
 
 [[package]]
+name = "emulator"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "clap",
+ "strfmt",
+]
+
+[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -144,16 +154,6 @@ name = "strfmt"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a8348af2d9fc3258c8733b8d9d8db2e56f54b2363a4b5b81585c7875ed65e65"
-
-[[package]]
-name = "strm1-emulator"
-version = "0.1.0"
-dependencies = [
- "bitflags",
- "byteorder",
- "clap",
- "strfmt",
-]
 
 [[package]]
 name = "strsim"

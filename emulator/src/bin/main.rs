@@ -5,10 +5,7 @@ use std::{error::Error, fmt::Debug, fs, io, path::PathBuf, process::exit, str::F
 use byteorder::{BigEndian, LittleEndian};
 use clap::Parser;
 use emulator::Emulator;
-use endian::EndianRewriteExt;
-
-mod emulator;
-mod endian;
+use emulator::endian::EndianRewriteExt;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]

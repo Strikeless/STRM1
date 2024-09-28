@@ -56,4 +56,6 @@
     loadl {dest: reg}, {src_addr: reg}      => instr_rr (21, dest, src_addr)    ; low %dest = high MEM[%src_addr]
     storeh {dest_addr: reg}, {src: reg}     => instr_rr (22, dest_addr, src)    ; high MEM[%dest_addr] = high %src
     storel {dest_addr: reg}, {src: reg}     => instr_rr (23, dest_addr, src)    ; high MEM[%dest_addr] = low %src
+
+    halt                                    => instr    (24)                    ; Stops linear code execution
 }

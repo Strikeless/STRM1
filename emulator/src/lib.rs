@@ -10,6 +10,7 @@ pub const MEMORY_SIZE: usize = 2usize.pow(16);
 pub const GPR_COUNT: usize = 2usize.pow(4);
 pub const AUS_PER_WORD: u32 = Word::BITS / AddressableUnit::BITS;
 
+pub mod endian;
 mod alu;
 mod execute;
 mod flags;
@@ -22,6 +23,8 @@ pub struct Emulator {
     pub gpr_file: [Word; GPR_COUNT],
     pub program_counter: Word,
     pub alu: ALU,
+
+    pub halted: bool,
 }
 
 impl Emulator {
@@ -51,6 +54,7 @@ impl Emulator {
             gpr_file: [0; GPR_COUNT],
             program_counter: 0,
             alu: ALU::new(),
+            halted: false,
         }
     }
 }

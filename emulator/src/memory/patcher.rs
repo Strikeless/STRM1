@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::emulator::{self, Word};
+use crate::Word;
 
 // Slow and stupid thing made so I'll never ever have to worry about byte endian again while working on this emulator
 
@@ -15,7 +15,7 @@ impl MemoryPatcher {
         Self::default()
     }
 
-    pub fn sync(&mut self, memory: &mut [u8; emulator::MEMORY_SIZE]) {
+    pub fn sync(&mut self, memory: &mut [u8; crate::MEMORY_SIZE]) {
         if self.mutable_values.len() > 1 || self.immutable_values.len() > 1 {
             println!("mem patcher {} {}", self.mutable_values.len(), self.immutable_values.len());
         }
@@ -29,7 +29,7 @@ impl MemoryPatcher {
         self.immutable_values.clear();
     }
 
-    pub fn get<'a>(&'a mut self, memory: &[u8; emulator::MEMORY_SIZE], addr: Word) -> &'a Word {
+    pub fn get<'a>(&'a mut self, memory: &[u8; crate::MEMORY_SIZE], addr: Word) -> &'a Word {
         let value = self.direct_get(memory, addr);
 
         self.immutable_values.insert(addr, value);
@@ -38,7 +38,7 @@ impl MemoryPatcher {
 
     pub fn get_mut<'a>(
         &'a mut self,
-        memory: &[u8; emulator::MEMORY_SIZE],
+        memory: &[u8; crate::MEMORY_SIZE],
         addr: Word,
     ) -> &'a mut Word {
         let value = self.direct_get(memory, addr);
@@ -47,7 +47,7 @@ impl MemoryPatcher {
         self.mutable_values.get_mut(&addr).unwrap()
     }
 
-    fn direct_get(&self, memory: &[u8; emulator::MEMORY_SIZE], addr: Word) -> Word {
+    fn direct_get(&self, memory: &[u8; crate::MEMORY_SIZE], addr: Word) -> Word {
         if self.mutable_values.contains_key(&addr) {
             return self.mutable_values[&addr];
         }
@@ -60,7 +60,7 @@ impl MemoryPatcher {
         ((high as u16) << 8) | low as u16
     }
 
-    fn direct_set(&self, memory: &mut [u8; emulator::MEMORY_SIZE], addr: Word, value: Word) {
+    fn direct_set(&self, memory: &mut [u8; crate::MEMORY_SIZE], addr: Word, value: Word) {
         let high = value >> 8;
         let low = value & 0xFF;
 
@@ -71,6 +71,6 @@ impl MemoryPatcher {
     }
 
     fn map_addr(addr: Word) -> [usize; 2] {
-        [addr as usize, (addr as usize + 1) % emulator::MEMORY_SIZE]
+        [addr as usize, (addr as usize + 1) % crate::MEMORY_SIZE]
     }
 }

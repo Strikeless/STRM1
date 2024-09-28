@@ -2,6 +2,7 @@ pub const REG_COUNT: usize = 2usize.pow(4);
 pub const MEM_START: usize = 1024;
 pub const MEM_LENGTH: usize = 2usize.pow(16) - MEM_START;
 
+#[derive(Debug, Clone, Copy)]
 pub enum Instruction {
     LoadI { dest: usize, value: u16 },
     Load { dest: usize, src_addr: usize },
@@ -13,6 +14,7 @@ pub enum Instruction {
     Add { a: usize, b: usize },
     Sub { a: usize, b: usize },
     And { a: usize, b: usize },
+    Halt,
 }
 
 impl Instruction {
@@ -28,6 +30,7 @@ impl Instruction {
             Self::Add { a, b } => (8, a, b, None),
             Self::Sub { a, b } => (9, a, b, None),
             Self::And { a, b } => (15, a, b, None),
+            Self::Halt => (24, 0, 0, None),
         };
 
         let instruction_word = ((opcode << 10) | (a << 6) | (b << 2)) as u16;

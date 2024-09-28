@@ -1,6 +1,12 @@
 use super::{flags::Flags, Emulator, Word};
 
 impl Emulator {
+    pub fn execute_to_halt(&mut self) {
+        while !self.halted {
+            self.execute_instruction();
+        }
+    }
+
     pub fn execute_instruction(&mut self) {
         let instruction = self.pc_next();
 
@@ -101,6 +107,9 @@ impl Emulator {
                 let dest = this.memory_mut(*dest_addr);
                 *dest = (*dest & 0x00FF) | ((src & 0x00FF) << 8);
             }),
+
+            // halt
+            24 => self.halted = true,
 
             _ => {
                 eprintln!("Illegal opcode {:b}", opcode);
