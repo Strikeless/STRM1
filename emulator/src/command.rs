@@ -10,8 +10,8 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum CommandError {
     // Not thrown directly by the arg reader
-    #[error("Unknown command")]
-    UnknownCommand,
+    #[error("{0}")]
+    Other(String),
 
     #[error("Missing argument {0}")]
     MissingArgument(usize),

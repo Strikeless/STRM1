@@ -68,6 +68,14 @@ impl Cli {
         let mut cmd_args = cmd.args();
 
         match cmd_args.next()? {
+            "e" | "exec" | "execute" => {
+                let instruction_count: usize = cmd_args.next_parsed().unwrap_or(Ok(1))?;
+
+                for _ in 0..instruction_count {
+                    self.emulator.execute_instruction()?;
+                }
+            }
+
             "p" | "print" => {
                 let set_alu_flags = self
                     .emulator
@@ -89,17 +97,33 @@ impl Cli {
                 info!("ALU flags:   {:?}", set_alu_flags);
             }
 
-            "e" | "exec" | "execute" => {
-                let instruction_count: usize = cmd_args.next_parsed().unwrap_or(Ok(1))?;
+            "d" | "dump" => {
+                let addr: Word = cmd_args.next_parsed()??;
+                let len: Word = cmd_args.next_parsed()??;
 
-                for _ in 0..instruction_count {
-                    self.emulator.execute_instruction()?;
-                }
+                let words = (addr .. addr + len).step_by(2)
+                    .map(|addr| self.emulator.memory.word(addr).unwrap_or(0))
+                    .collect::<Vec<_>>();
+
+                let bytes = (addr .. addr + len)
+                    .map(|addr| self.emulator.memory.byte(addr).unwrap_or(0))
+                    .collect::<Vec<_>>();
+                
+                let output = match cmd_args.next()? {
+                    "db" | "decb" => format!("{:?}", bytes),
+                    "dw" | "decw" => format!("{:?}", words),
+                    "xb" | "hexb" => format!("{:x?}", bytes),
+                    "xw" | "hexw" => format!("{:x?}", words),
+                    "s" | "utf8" => String::from_utf8_lossy(&bytes).to_string(),
+                    _ => return Err(CommandError::ParseError("Output format should be [d]ec(b/w), he[x](b/w), or utf8 [s]".to_string()).into())
+                };
+
+                info!("Dump {}..{}: {}", addr, addr + len, output);
             }
 
             "q" | "quit" | "exit" => exit(0),
 
-            _ => return Err(CommandError::UnknownCommand.into()),
+            _ => return Err(CommandError::Other("Unknown command".to_string()).into()),
         }
 
         Ok(())
