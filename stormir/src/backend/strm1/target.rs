@@ -30,7 +30,7 @@ impl Instruction {
             Self::Add { a, b } => (8, a, b, None),
             Self::Sub { a, b } => (9, a, b, None),
             Self::And { a, b } => (15, a, b, None),
-            Self::Halt => (24, 0, 0, None),
+            Self::Halt => (26, 0, 0, None),
         };
 
         let instruction_word = ((opcode << 10) | (a << 6) | (b << 2)) as u16;

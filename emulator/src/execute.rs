@@ -85,31 +85,31 @@ impl Emulator {
             }),
 
             // loadh
-            20 => self.wr(ra, rb, |this, dest, src_addr| {
+            22 => self.wr(ra, rb, |this, dest, src_addr| {
                 let value = *this.memory(*src_addr);
                 *dest = (*dest & 0x00FF) | (value & 0xFF00);
             }),
 
             // loadl
-            21 => self.wr(ra, rb, |this, dest, src_addr| {
+            23 => self.wr(ra, rb, |this, dest, src_addr| {
                 let src = *this.memory(*src_addr);
                 *dest = (*dest & 0xFF00) | ((src & 0xFF00) >> 8);
             }),
 
             // storeh
-            22 => self.rr(ra, rb, |this, dest_addr, src| {
+            24 => self.rr(ra, rb, |this, dest_addr, src| {
                 let dest = this.memory_mut(*dest_addr);
                 *dest = (*dest & 0x00FF) | (src & 0xFF00);
             }),
 
             // storel
-            23 => self.rr(ra, rb, |this, dest_addr, src| {
+            25 => self.rr(ra, rb, |this, dest_addr, src| {
                 let dest = this.memory_mut(*dest_addr);
                 *dest = (*dest & 0x00FF) | ((src & 0x00FF) << 8);
             }),
 
             // halt
-            24 => self.halted = true,
+            26 => self.halted = true,
 
             _ => {
                 eprintln!("Illegal opcode {:b}", opcode);

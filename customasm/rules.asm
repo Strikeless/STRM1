@@ -47,15 +47,15 @@
     ; 14 reserved for mulc
 
     and {a: reg}, {b: reg}                  => instr_rr (15, a, b)              ; %a = %a & %b
-    ; 16, 17, 18, 19 reserved for or, not, xor, nand
+    ; 16, 17, 18, 19, 20, 21 reserved for or, not, xor, nand, shl, shr
 
     ; Load and store that only operate on the high or low byte of the register and the high byte in memory,
     ; high byte being at the exact address specified and low byte being at the next address (big endian).
     ; The byte in memory is the same in all of these instructions (the high byte), it's the byte in the register that changes.
-    loadh {dest: reg}, {src_addr: reg}      => instr_rr (20, dest, src_addr)    ; high %dest = high MEM[%src_addr]
-    loadl {dest: reg}, {src_addr: reg}      => instr_rr (21, dest, src_addr)    ; low %dest = high MEM[%src_addr]
-    storeh {dest_addr: reg}, {src: reg}     => instr_rr (22, dest_addr, src)    ; high MEM[%dest_addr] = high %src
-    storel {dest_addr: reg}, {src: reg}     => instr_rr (23, dest_addr, src)    ; high MEM[%dest_addr] = low %src
+    loadh {dest: reg}, {src_addr: reg}      => instr_rr (22, dest, src_addr)    ; high %dest = high MEM[%src_addr]
+    loadl {dest: reg}, {src_addr: reg}      => instr_rr (23, dest, src_addr)    ; low %dest = high MEM[%src_addr]
+    storeh {dest_addr: reg}, {src: reg}     => instr_rr (24, dest_addr, src)    ; high MEM[%dest_addr] = high %src
+    storel {dest_addr: reg}, {src: reg}     => instr_rr (25, dest_addr, src)    ; high MEM[%dest_addr] = low %src
 
-    halt                                    => instr    (24)                    ; Stops linear code execution
+    halt                                    => instr    (26)                    ; Stops linear code execution
 }
