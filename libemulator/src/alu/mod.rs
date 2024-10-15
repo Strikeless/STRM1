@@ -1,13 +1,16 @@
-use super::{flags::Flags, Word};
+use flags::ALUFlags;
+use libstrmisa::Word;
+
+pub mod flags;
 
 pub struct ALU {
-    pub flags: Flags,
+    pub flags: ALUFlags,
 }
 
 impl ALU {
     pub fn new() -> Self {
         Self {
-            flags: Flags::empty(),
+            flags: ALUFlags::empty(),
         }
     }
 
@@ -31,7 +34,7 @@ impl ALU {
     }
 
     pub fn addc(&mut self, a: Word, b: Word) -> Word {
-        let carry = if self.flags.contains(Flags::CARRY) {
+        let carry = if self.flags.contains(ALUFlags::CARRY) {
             1
         } else {
             0
@@ -40,7 +43,7 @@ impl ALU {
     }
 
     pub fn subc(&mut self, a: Word, b: Word) -> Word {
-        let carry = if self.flags.contains(Flags::CARRY) {
+        let carry = if self.flags.contains(ALUFlags::CARRY) {
             1
         } else {
             0
@@ -49,12 +52,15 @@ impl ALU {
     }
 
     fn flags_by(&mut self, value: Word, carry: bool) -> Word {
-        self.flags = if carry { Flags::CARRY } else { Flags::empty() }
-            | if value == 0 {
-                Flags::ZERO
-            } else {
-                Flags::empty()
-            };
+        self.flags = if carry {
+            ALUFlags::CARRY
+        } else {
+            ALUFlags::empty()
+        } | if value == 0 {
+            ALUFlags::ZERO
+        } else {
+            ALUFlags::empty()
+        };
 
         value
     }
