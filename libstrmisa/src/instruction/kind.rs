@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use bimap::BiMap;
 use lazy_static::lazy_static;
 
@@ -71,5 +73,30 @@ impl InstructionKind {
             Self::LoadI => true,
             _ => false,
         }
+    }
+}
+
+impl Display for InstructionKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Nop => "nop",
+            Self::LoadI => "loadi",
+            Self::Load => "load",
+            Self::Store => "store",
+            Self::Cpy => "cpy",
+            Self::Jmp => "jmp",
+            Self::JmpC => "jmpc",
+            Self::JmpZ => "jmpz",
+            Self::Add => "add",
+            Self::Sub => "sub",
+            Self::AddC => "addc",
+            Self::SubC => "subc",
+            Self::And => "and",
+            Self::LoadH => "loadh",
+            Self::LoadL => "loadl",
+            Self::StoreH => "storeh",
+            Self::StoreL => "storel",
+            Self::Halt => "halt",
+        })
     }
 }

@@ -1,9 +1,23 @@
-use anyhow::anyhow;
+use std::fmt::Display;
+
 use kind::InstructionKind;
+use thiserror::Error;
 
 use crate::{Immediate, Register, Word};
 
 pub mod kind;
+
+#[derive(Debug, Error, Clone, Copy)]
+pub enum InstructionAssemblyError {
+    #[error("Missing immediate")]
+    MissingImmediate,
+}
+
+#[derive(Debug, Error, Clone, Copy)]
+pub enum InstructionDeassemblyError {
+    #[error("Unrecognized opcode")]
+    UnrecognizedOpcode,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Instruction {
@@ -38,23 +52,23 @@ impl Instruction {
         self
     }
 
-    // TODO: Assemble and deassemble should be using concrete error types instead of anyhow.
-
-    pub fn assemble(self) -> anyhow::Result<Vec<u8>> {
+    pub fn assemble(self) -> Result<Vec<u8>, InstructionAssemblyError> {
         let has_immediate = self.kind.has_immediate();
-        let mut output = Vec::with_capacity(if has_immediate { crate::BYTES_PER_WORD * 2 } else { crate::BYTES_PER_WORD });
+        let mut output = Vec::with_capacity(if has_immediate {
+            crate::BYTES_PER_WORD * 2
+        } else {
+            crate::BYTES_PER_WORD
+        });
 
         output.extend(crate::word_to_bytes(
-            (
-                self.kind.opcode() << 10
-                | self.reg_a.unwrap_or(0) << 6
-                | self.reg_b.unwrap_or(0) << 2
-            ) as u16
+            (self.kind.opcode() << 10 | self.reg_a.unwrap_or(0) << 6 | self.reg_b.unwrap_or(0) << 2)
+                as u16,
         ));
 
         if has_immediate {
-            let immediate = self.immediate
-                .ok_or_else(|| anyhow!("Instruction expected immediate"))?;
+            let immediate = self
+                .immediate
+                .ok_or(InstructionAssemblyError::MissingImmediate)?;
 
             output.extend(crate::word_to_bytes(immediate));
         }
@@ -62,7 +76,9 @@ impl Instruction {
         Ok(output)
     }
 
-    pub fn deassemble_instruction_word(instruction: Word) -> anyhow::Result<Self> {
+    pub fn deassemble_instruction_word(
+        instruction: Word,
+    ) -> Result<Self, InstructionDeassemblyError> {
         let [opcode, reg_a, reg_b] = [
             (instruction >> 10) as usize,
             (instruction >> 6) as usize & 0xF,
@@ -70,7 +86,7 @@ impl Instruction {
         ];
 
         let kind = InstructionKind::from_opcode(opcode)
-            .ok_or_else(|| anyhow!("Unrecognized opcode"))?;
+            .ok_or(InstructionDeassemblyError::UnrecognizedOpcode)?;
 
         Ok(Self {
             kind,
@@ -79,5 +95,14 @@ impl Instruction {
             reg_b: Some(reg_b),
             immediate: None,
         })
+    }
+}
+
+impl Display for Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "{}({:?}, {:?}, {:?})",
+            self.kind, self.reg_a, self.reg_b, self.immediate
+        ))
     }
 }

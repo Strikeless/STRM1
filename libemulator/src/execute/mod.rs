@@ -1,4 +1,8 @@
-use libstrmisa::{instruction::Instruction, Word};
+use libstrmisa::{
+    instruction::{Instruction, InstructionDeassemblyError},
+    Word,
+};
+use thiserror::Error;
 
 use crate::{memory::wordmut::MemoryWordMutPatch, Emulator};
 
@@ -9,8 +13,13 @@ pub enum ExecuteOk {
     Halted,
 }
 
+#[derive(Debug, Error, Clone, Copy)]
 pub enum ExecuteErr {
+    #[error("Memory access violation")]
     MemoryAccessViolation,
+
+    #[error("Illegal instruction ({0})")]
+    IllegalInstruction(InstructionDeassemblyError),
 }
 
 impl Emulator {
@@ -23,7 +32,7 @@ impl Emulator {
         let instruction_word = self.pc_next_word()?;
 
         let mut instruction = Instruction::deassemble_instruction_word(instruction_word)
-            .expect("TODO: Illegal instruction handling");
+            .map_err(|e| ExecuteErr::IllegalInstruction(e))?;
 
         if instruction.kind.has_immediate() {
             let immediate = self.pc_next_word()?;
