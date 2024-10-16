@@ -55,7 +55,7 @@ impl Cli {
         loop {
             if let Err(e) = self.run_cmd() {
                 match e.downcast::<CommandError>() {
-                    Ok(CommandError::MissingArgument(1)) => {} // Missing command argument
+                    Ok(CommandError::MissingArgument(1)) => {} // Missing first argument (command)
                     Ok(e) => error!("Bad command: {}", e),
                     Err(e) => error!("{:?}", e),
                 }
@@ -114,11 +114,17 @@ impl Cli {
                     "dw" | "decw" => format!("{:?}", words),
                     "xb" | "hexb" => format!("{:x?}", bytes),
                     "xw" | "hexw" => format!("{:x?}", words),
+                    // No binary because apparently {:b?} wont do for whatever reason.
                     "s" | "utf8" => String::from_utf8_lossy(&bytes).to_string(),
                     _ => return Err(CommandError::ParseError("Output format should be [d]ec(b/w), he[x](b/w), or utf8 [s]".to_string()).into())
                 };
 
                 info!("Dump {}..{}: {}", addr, addr + len, output);
+            }
+
+            "j" | "jmp" | "goto" => {
+                let addr = cmd_args.next_parsed()??;
+                self.emulator.pc = addr;
             }
 
             "q" | "quit" | "exit" => exit(0),

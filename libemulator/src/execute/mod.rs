@@ -8,6 +8,9 @@ use crate::{memory::wordmut::MemoryWordMutPatch, Emulator};
 
 mod parsed;
 
+#[cfg(test)]
+mod tests;
+
 pub enum ExecuteOk {
     Normal,
     Halted,

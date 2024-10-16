@@ -8,7 +8,7 @@ use crate::{alu::flags::ALUFlags, Emulator};
 use super::{ExecuteErr, ExecuteOk};
 
 impl Emulator {
-    pub(super) fn execute_parsed_instruction(
+    pub fn execute_parsed_instruction(
         &mut self,
         instruction: Instruction,
     ) -> Result<ExecuteOk, ExecuteErr> {
