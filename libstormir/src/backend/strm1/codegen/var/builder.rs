@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 use anyhow::anyhow;
 
@@ -17,6 +17,12 @@ pub(super) struct VarDefinition {
     pub begin: usize,
     pub end: Option<usize>,
     pub needs_register: bool,
+}
+
+impl VarDefinition {
+    pub fn instruction_range(&self) -> Range<usize> {
+        self.begin .. self.end.unwrap_or(usize::MAX)
+    }
 }
 
 impl VarTableBuilder {

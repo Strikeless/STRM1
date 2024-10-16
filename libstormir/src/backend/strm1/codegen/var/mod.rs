@@ -8,12 +8,15 @@ use crate::lir::LIRVarId;
 
 pub mod builder;
 
-#[derive(Debug, Clone, Default)]
+#[cfg(test)]
+mod tests;
+
+#[derive(Debug, Clone)]
 pub struct VarTable {
     allocations: HashMap<VarKey, VarAllocation>,
 
-    reg_usage: TimedUsageMap,
-    mem_usage: TimedUsageMap,
+    reg_usage: RangedUsageMap,
+    mem_usage: RangedUsageMap,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -34,6 +37,20 @@ pub enum VarAllocationKind {
     Memory(Word),
 }
 
+impl Default for VarTable {
+    fn default() -> Self {
+        Self {
+            allocations: HashMap::default(),
+            reg_usage: RangedUsageMap(vec![Vec::new(); libstrmisa::REGISTER_COUNT]),
+
+            // FIXME: It's stupid that we're instantly allocating the usage map for the entire memory space,
+            //        but find_free doesn't work as expected if the vector isn't already filled.
+            //        Maybe add a maximum size to RangedUsageMap and let it handle this stuff?
+            mem_usage: RangedUsageMap(vec![Vec::new(); Word::MAX as usize])
+        }
+    }
+}
+
 impl VarTable {
     fn from_builder(builder: VarTableBuilder) -> anyhow::Result<Self> {
         let mut this = Self::default();
@@ -46,10 +63,10 @@ impl VarTable {
             let allocation = self
                 .find_free_register(&definition)
                 .map(|index| VarAllocationKind::Register(index))
-                .or_else(|| {
+                /*.or_else(|| {
                     self.try_steal_register(&definition)
                         .map(|index| VarAllocationKind::Register(index))
-                })
+                })*/
                 .or_else(|| {
                     if definition.needs_register {
                         return None;
@@ -59,6 +76,11 @@ impl VarTable {
                         .map(|addr| VarAllocationKind::Memory(addr as Word))
                 })
                 .ok_or_else(|| anyhow!("Out of variable space"))?;
+
+            match allocation {
+                VarAllocationKind::Register(index) => self.reg_usage.mark_used(index, definition.instruction_range()),
+                VarAllocationKind::Memory(addr) => self.mem_usage.mark_used(addr as usize, definition.instruction_range()),
+            }
 
             self.allocations.insert(
                 key,
@@ -74,34 +96,38 @@ impl VarTable {
 
     fn try_steal_register(&mut self, definition: &VarDefinition) -> Option<Register> {
         // TODO
+        // Don't forget to handle the usage maps when implementing this!
         None
     }
 
     fn find_free_register(&self, definition: &VarDefinition) -> Option<Register> {
-        let time_range = definition.begin..definition.end.unwrap_or(usize::MAX);
-        self.reg_usage.find_free(&time_range)
+        self.reg_usage
+            .find_free(&definition.instruction_range())
     }
 
     fn find_free_memory(&self, definition: &VarDefinition) -> Option<Word> {
-        let time_range = definition.begin..definition.end.unwrap_or(usize::MAX);
-
         self.mem_usage
-            .find_free(&time_range)
+            .find_free(&definition.instruction_range())
             .map(|index| index as Word)
     }
 }
 
 #[derive(Debug, Clone, Default)]
-struct TimedUsageMap(Vec<Vec<Range<usize>>>);
+struct RangedUsageMap(Vec<Vec<Range<usize>>>);
 
-impl TimedUsageMap {
-    pub fn find_free(&self, time_range: &Range<usize>) -> Option<usize> {
+impl RangedUsageMap {
+    pub fn mark_used(&mut self, index: usize, instruction_range: Range<usize>) {
+        self.0.get_mut(index).unwrap()
+            .push(instruction_range);
+    }
+
+    pub fn find_free(&self, instruction_range: &Range<usize>) -> Option<usize> {
         // Find the index of the first element...
         self.0.iter().position(|usage| {
-            // where no other usage overlaps at the same time range
+            // where no other usage overlaps at the same instruction range
             usage
                 .iter()
-                .all(|used_time_range| !Self::ranges_overlap(time_range, used_time_range))
+                .all(|used_range| !Self::ranges_overlap(instruction_range, used_range))
         })
     }
 
