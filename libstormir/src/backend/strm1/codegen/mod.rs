@@ -107,8 +107,6 @@ impl Transformer for STRM1CodegenTransformer {
                 // Handled during prepass
                 LIRInstruction::DefineVar { .. } | LIRInstruction::DropVar { .. } => {}
 
-                LIRInstruction::LoadIAVar { id } => {}
-
                 _ => todo!(),
             }
         }

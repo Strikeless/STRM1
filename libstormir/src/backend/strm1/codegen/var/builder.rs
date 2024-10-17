@@ -16,12 +16,14 @@ pub(super) struct VarDefinition {
     pub key: VarKey,
     pub begin: usize,
     pub end: Option<usize>,
+    
     pub needs_register: bool,
+    pub heat: usize,
 }
 
 impl VarDefinition {
     pub fn instruction_range(&self) -> Range<usize> {
-        self.begin .. self.end.unwrap_or(usize::MAX)
+        self.begin..self.end.unwrap_or(usize::MAX)
     }
 }
 
@@ -47,6 +49,10 @@ impl VarTableBuilder {
         self.drop(VarKey::Normal(id), 0)
     }
 
+    pub fn heaten_normal(&mut self, id: LIRVarId) -> anyhow::Result<()> {
+        self.heaten(VarKey::Normal(id))
+    }
+
     pub fn define(&mut self, key: VarKey, needs_register: bool) -> anyhow::Result<()> {
         if self.definitions.contains_key(&key) {
             return Err(anyhow!("Reused variable key"));
@@ -59,6 +65,7 @@ impl VarTableBuilder {
                 begin: self.current_index,
                 end: None,
                 needs_register,
+                heat: 0,
             },
         );
 
@@ -71,6 +78,12 @@ impl VarTableBuilder {
         let def = self.def_mut(key)?;
         def.end = Some(index);
 
+        Ok(())
+    }
+
+    pub fn heaten(&mut self, key: VarKey) -> anyhow::Result<()> {
+        let def = self.def_mut(key)?;
+        def.heat += 1;
         Ok(())
     }
 
