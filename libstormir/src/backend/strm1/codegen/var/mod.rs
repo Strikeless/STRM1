@@ -1,6 +1,6 @@
 use std::{collections::HashMap, ops::Range};
 
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
 use builder::{VarDefinition, VarTableBuilder};
 use libstrmisa::{Register, Word};
 
@@ -96,12 +96,14 @@ impl VarTable {
             .ok_or_else(|| anyhow!("Out of variable space"))?;
 
             match allocation {
-                VarAllocationKind::Register(index) => self
-                    .reg_usage
-                    .mark_used(index, key, definition.instruction_range()),
-                VarAllocationKind::Memory(addr) => self
-                    .mem_usage
-                    .mark_used(addr as usize, key, definition.instruction_range()),
+                VarAllocationKind::Register(index) => {
+                    self.reg_usage
+                        .mark_used(index, key, definition.instruction_range())
+                }
+                VarAllocationKind::Memory(addr) => {
+                    self.mem_usage
+                        .mark_used(addr as usize, key, definition.instruction_range())
+                }
             }
 
             self.allocations.insert(
@@ -117,17 +119,19 @@ impl VarTable {
     }
 
     fn try_steal_register(&mut self, definition: &VarDefinition) -> Option<Register> {
-        // Find a register allocation that doesn't need a register and is colder than this definition.
-        let cold_key = *self.allocations.iter()
+        // Find a register allocation that doesn't need a register and is colder than this definition or needs a register itself.
+        let cold_key = *self
+            .allocations
+            .iter()
             .filter(|(_, alloc)| alloc.kind.is_register())
             .filter(|(_, alloc)| !alloc.definition.needs_register)
-            .filter(|(_, alloc)| definition.needs_register || alloc.definition.heat < definition.heat)
+            .filter(|(_, alloc)| {
+                definition.needs_register || alloc.definition.heat < definition.heat
+            })
             .min_by_key(|(_, alloc)| alloc.definition.heat)?
             .0;
 
         let cold = self.allocations.get(&cold_key).unwrap();
-
-        println!("try_steal_register: found cold {:?}", cold_key);
 
         // Find free memory for the cold variable to be moved to.
         let cold_new_addr = self.find_free_memory(&cold.definition)?;
@@ -136,11 +140,15 @@ impl VarTable {
         let reg_index = cold.kind.as_register().unwrap();
         self.reg_usage.mark_free(reg_index, cold.definition.key);
 
-        // Allocate the cold variable to the free memory. 
+        // Allocate the cold variable to the free memory.
         let cold = self.allocations.get_mut(&cold_key).unwrap();
         cold.kind = VarAllocationKind::Memory(cold_new_addr);
         let cold = self.allocations.get(&cold_key).unwrap();
-        self.mem_usage.mark_used(cold_new_addr as usize, cold.definition.key, cold.definition.instruction_range());
+        self.mem_usage.mark_used(
+            cold_new_addr as usize,
+            cold.definition.key,
+            cold.definition.instruction_range(),
+        );
 
         Some(reg_index)
     }
@@ -161,13 +169,18 @@ struct RangedUsageMap(Vec<Vec<(VarKey, Range<usize>)>>);
 
 impl RangedUsageMap {
     pub fn mark_used(&mut self, index: usize, key: VarKey, instruction_range: Range<usize>) {
-        self.0.get_mut(index).unwrap().push((key, instruction_range));
+        self.0
+            .get_mut(index)
+            .unwrap()
+            .push((key, instruction_range));
     }
 
     pub fn mark_free(&mut self, index: usize, key: VarKey) {
         let usage = self.0.get_mut(index).unwrap();
-        
-        let index = usage.iter().position(|(used_key, _)| *used_key == key)
+
+        let index = usage
+            .iter()
+            .position(|(used_key, _)| *used_key == key)
             .expect("Free on index-key pair with no allocation");
 
         usage.remove(index);

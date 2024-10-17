@@ -43,7 +43,7 @@ fn forced_memory_alloc_by_heat() {
     // Add one more variable that is not heated
     let key = VarKey::Special(0);
     builder.define(key, false).unwrap();
-    
+
     let var_table = builder.build().unwrap();
     let var = var_table.get(key).expect("Variable wasn't allocated");
 
@@ -63,9 +63,12 @@ fn forced_memory_alloc_by_needing_registers() {
     // Add one more variable that doesn't need a register
     let key = VarKey::Special(0);
     builder.define(key, false).unwrap();
-    
+
     let var_table = builder.build().unwrap();
     let var = var_table.get(key).expect("Variable wasn't allocated");
 
-    assert!(var.kind.is_memory(), "Variable that doesn't need register did not go to memory");
+    assert!(
+        var.kind.is_memory(),
+        "Variable that doesn't need register did not go to memory"
+    );
 }

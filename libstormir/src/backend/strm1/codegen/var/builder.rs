@@ -16,7 +16,7 @@ pub(super) struct VarDefinition {
     pub key: VarKey,
     pub begin: usize,
     pub end: Option<usize>,
-    
+
     pub needs_register: bool,
     pub heat: usize,
 }
