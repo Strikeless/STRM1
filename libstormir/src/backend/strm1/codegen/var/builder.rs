@@ -39,20 +39,6 @@ impl VarTableBuilder {
         self.current_index = index;
     }
 
-    pub fn define_normal(&mut self, id: LIRVarId) -> anyhow::Result<()> {
-        let key = VarKey::Normal(id);
-        self.define(key, false)?;
-        Ok(())
-    }
-
-    pub fn drop_normal(&mut self, id: LIRVarId) -> anyhow::Result<()> {
-        self.drop(VarKey::Normal(id), 0)
-    }
-
-    pub fn heaten_normal(&mut self, id: LIRVarId) -> anyhow::Result<()> {
-        self.heaten(VarKey::Normal(id))
-    }
-
     pub fn define(&mut self, key: VarKey, needs_register: bool) -> anyhow::Result<()> {
         if self.definitions.contains_key(&key) {
             return Err(anyhow!("Reused variable key"));

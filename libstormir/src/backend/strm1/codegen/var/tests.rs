@@ -36,8 +36,9 @@ fn forced_memory_alloc_by_heat() {
 
     // Use all the registers with heated variables
     for i in 0..libstrmisa::REGISTER_COUNT {
-        builder.define_normal(i).unwrap();
-        builder.heaten_normal(i).unwrap();
+        let key = VarKey::Normal(i);
+        builder.define(key, false).unwrap();
+        builder.heaten(key).unwrap();
     }
 
     // Add one more variable that is not heated

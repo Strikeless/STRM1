@@ -48,8 +48,10 @@ impl Transformer for STRM1CodegenTransformer {
             var_table_builder.set_current_index(index);
 
             match lir_instruction {
-                LIRInstruction::DefineVar { id } => var_table_builder.define_normal(*id)?,
-                LIRInstruction::DropVar { id } => var_table_builder.drop_normal(*id)?,
+                LIRInstruction::DefineVar { id } => {
+                    var_table_builder.define(VarKey::Normal(*id), false)?
+                }
+                LIRInstruction::DropVar { id } => var_table_builder.drop(VarKey::Normal(*id), 0)?,
 
                 //
                 // Loads to input accumulators need a special register allocation to hold the value in
