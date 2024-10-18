@@ -1,10 +1,10 @@
 use libstrmisa::{
     instruction::{Instruction, InstructionDeassemblyError},
-    Word,
+    Register, Word,
 };
 use thiserror::Error;
 
-use crate::{memory::wordmut::MemoryWordMutPatch, Emulator};
+use crate::{memory::wordmut::MemoryWordMutPatch, tracing::TraceData, Emulator};
 
 mod parsed;
 
@@ -25,8 +25,12 @@ pub enum ExecuteErr {
     IllegalInstruction(InstructionDeassemblyError),
 }
 
-impl Emulator {
+impl<T> Emulator<T>
+where
+    T: TraceData,
+{
     pub fn execute_instruction(&mut self) -> Result<ExecuteOk, ExecuteErr> {
+        self.current_trace = T::trace_from_state(&self);
         let instruction = self.parse_next_instruction()?;
         self.execute_parsed_instruction(instruction)
     }
@@ -57,9 +61,9 @@ impl Emulator {
             .ok_or(ExecuteErr::MemoryAccessViolation)
     }
 
-    fn mem_word_mut(&mut self, addr: Word) -> Result<MemoryWordMutPatch, ExecuteErr> {
+    fn mem_word_mut(&mut self, addr: Word) -> Result<MemoryWordMutPatch<T>, ExecuteErr> {
         self.memory
-            .word_mut(addr)
+            .word_mut(self.current_trace, addr)
             .ok_or(ExecuteErr::MemoryAccessViolation)
     }
 
@@ -71,7 +75,15 @@ impl Emulator {
 
     fn mem_byte_mut(&mut self, addr: Word) -> Result<&mut u8, ExecuteErr> {
         self.memory
-            .byte_mut(addr)
+            .byte_mut(self.current_trace, addr)
             .ok_or(ExecuteErr::MemoryAccessViolation)
+    }
+
+    fn reg(&self, index: Register) -> Word {
+        self.reg_file.register(index)
+    }
+
+    fn reg_mut(&mut self, index: Register) -> &mut Word {
+        self.reg_file.register_mut(self.current_trace, index)
     }
 }

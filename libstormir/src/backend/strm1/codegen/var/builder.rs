@@ -2,8 +2,6 @@ use std::{collections::HashMap, ops::Range};
 
 use anyhow::anyhow;
 
-use crate::lir::LIRVarId;
-
 use super::{VarKey, VarTable};
 
 pub struct VarTableBuilder {

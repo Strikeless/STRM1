@@ -3,11 +3,14 @@ use libstrmisa::{
     Word,
 };
 
-use crate::{alu::flags::ALUFlags, Emulator};
+use crate::{alu::flags::ALUFlags, tracing::TraceData, Emulator};
 
 use super::{ExecuteErr, ExecuteOk};
 
-impl Emulator {
+impl<T> Emulator<T>
+where
+    T: TraceData,
+{
     pub fn execute_parsed_instruction(
         &mut self,
         instruction: Instruction,
@@ -144,18 +147,18 @@ impl Emulator {
     }
 
     fn reg_a(&self, instruction: &Instruction) -> Word {
-        self.register(instruction.reg_a.unwrap())
+        self.reg(instruction.reg_a.unwrap())
     }
 
     fn reg_a_mut(&mut self, instruction: &Instruction) -> &mut Word {
-        self.register_mut(instruction.reg_a.unwrap())
+        self.reg_mut(instruction.reg_a.unwrap())
     }
 
     fn reg_b(&self, instruction: &Instruction) -> Word {
-        self.register(instruction.reg_b.unwrap())
+        self.reg(instruction.reg_b.unwrap())
     }
 
     /*fn reg_b_mut(&mut self, instruction: &Instruction) -> &mut Word {
-        self.register_mut(instruction.reg_b.unwrap())
+        self.reg_mut(instruction.reg_b.unwrap())
     }*/
 }

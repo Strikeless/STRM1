@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf, process::exit};
 use anyhow::anyhow;
 use clap::Parser;
 use command::{Command, CommandError};
-use libemulator::Emulator;
+use libemulator::{tracing::none::NoTraceData, Emulator};
 use libstrmisa::{instruction::Instruction, Word};
 use log::{error, info, LevelFilter};
 
@@ -38,7 +38,7 @@ fn main() {
 
 struct Cli {
     args: Args,
-    emulator: Emulator,
+    emulator: Emulator<NoTraceData>,
 }
 
 impl Cli {
@@ -93,7 +93,7 @@ impl Cli {
 
                 info!("PC:          {:05}", self.emulator.pc);
                 info!("Deassembled: {}", instruction_deassembly);
-                info!("Registers:   {:05?}", self.emulator.reg_file);
+                info!("Registers:   {:05?}", self.emulator.reg_file.array_clone_untraced());
                 info!("ALU flags:   {:?}", set_alu_flags);
             }
 

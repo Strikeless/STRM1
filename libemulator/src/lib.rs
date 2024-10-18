@@ -4,19 +4,31 @@ use alu::ALU;
 use anyhow::anyhow;
 use libstrmisa::Word;
 use memory::Memory;
+use regfile::RegFile;
+use tracing::TraceData;
 
 pub mod alu;
 pub mod execute;
 pub mod memory;
+pub mod regfile;
+pub mod tracing;
 
-pub struct Emulator {
-    pub memory: Memory,
-    pub reg_file: [Word; libstrmisa::REGISTER_COUNT],
+pub struct Emulator<T>
+where
+    T: TraceData,
+{
+    pub memory: Memory<T>,
+    pub reg_file: RegFile<T>,
     pub alu: ALU,
     pub pc: Word,
+
+    current_trace: T::Trace,
 }
 
-impl Emulator {
+impl<T> Emulator<T>
+where
+    T: TraceData,
+{
     pub fn new(memory_size: Word, program: Vec<u8>) -> anyhow::Result<Self> {
         if program.len() > memory_size as usize {
             return Err(anyhow!("Program doesn't fit into memory of specified size"));
@@ -30,22 +42,10 @@ impl Emulator {
 
         Ok(Self {
             memory: Memory::new(memory_data),
-            reg_file: [0; libstrmisa::REGISTER_COUNT],
+            reg_file: RegFile::new(),
             alu: ALU::new(),
             pc: 0,
+            current_trace: T::Trace::default(),
         })
-    }
-
-    pub fn register(&self, index: usize) -> Word {
-        *self
-            .reg_file
-            .get(index)
-            .expect("Out of bounds register access")
-    }
-
-    pub fn register_mut(&mut self, index: usize) -> &mut Word {
-        self.reg_file
-            .get_mut(index)
-            .expect("Out of bounds register access")
     }
 }
