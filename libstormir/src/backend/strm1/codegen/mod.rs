@@ -1,19 +1,89 @@
-use libstrmisa::instruction::Instruction;
-use var::{builder::VarTableBuilder, VarKey, VarTable};
+use anyhow::anyhow;
+use libstrmisa::{
+    instruction::{kind::InstructionKind, Instruction},
+    Register, Word,
+};
+use var::{builder::VarTableBuilder, VarAllocation, VarAllocationKind, VarKey, VarTable};
 
-use crate::{lir::LIRInstruction, transformer::Transformer};
+use crate::{
+    lir::{LIRInstruction, LIRVarId},
+    transformer::Transformer,
+};
 
 mod var;
 
 pub struct STRM1CodegenTransformer {
     var_table: VarTable,
+    output: Vec<Instruction>,
 }
 
 impl STRM1CodegenTransformer {
     pub fn new() -> Self {
         Self {
             var_table: VarTable::default(),
+            output: Vec::new(),
         }
+    }
+
+    fn transform_load_const(
+        &mut self,
+        index: usize,
+        acc_reg: &mut Option<Register>,
+        value: Word,
+    ) -> anyhow::Result<()> {
+        let acc_var = self.special_var(index)?;
+        *acc_reg = Some(acc_var.kind.as_register().unwrap());
+
+        self.output.extend([Instruction::new(InstructionKind::LoadI)
+            .with_reg_a(acc_reg.unwrap())
+            .with_immediate(value)]);
+
+        Ok(())
+    }
+
+    fn transform_load_var(
+        &mut self,
+        index: usize,
+        acc_reg: &mut Option<Register>,
+        var_id: LIRVarId,
+    ) -> anyhow::Result<()> {
+        let acc_var = self.special_var(index)?;
+        *acc_reg = Some(acc_var.kind.as_register().unwrap());
+
+        let var = self.var(var_id)?;
+
+        match var.kind {
+            // Simple register copy. This could be made to be a no-op, but that would make variable
+            // allocation more complex, and I think it's simpler to optimize this away later on.
+            VarAllocationKind::Register(var_reg) => {
+                self.output.extend([Instruction::new(InstructionKind::Cpy)
+                    .with_reg_a(acc_reg.unwrap())
+                    .with_reg_b(var_reg)])
+            }
+
+            VarAllocationKind::Memory(var_addr) => self.output.extend([
+                Instruction::new(InstructionKind::LoadI)
+                    .with_reg_a(acc_reg.unwrap())
+                    .with_immediate(var_addr),
+                Instruction::new(InstructionKind::Load)
+                    .with_reg_a(acc_reg.unwrap())
+                    .with_reg_b(acc_reg.unwrap()),
+            ]),
+        }
+
+        Ok(())
+    }
+
+    fn special_var(&self, index: usize) -> anyhow::Result<&VarAllocation> {
+        self.var_table
+            .get(VarKey::Special(index))
+            .ok_or_else(|| anyhow!("Special variable not allocated"))
+    }
+
+    fn var(&self, id: LIRVarId) -> anyhow::Result<&VarAllocation> {
+        self.var_table
+            .get(VarKey::Normal(id))
+            .ok_or_else(|| anyhow!("Undefined variable"))
     }
 }
 
@@ -99,20 +169,32 @@ impl Transformer for STRM1CodegenTransformer {
     }
 
     fn transform(&mut self, input: Vec<Self::Input>) -> anyhow::Result<Vec<Self::Output>> {
-        let mut output = Vec::new();
+        let mut ia_register = None;
+        let mut ib_register = None;
 
-        //let mut ia_register = None;
-        //let mut ib_register = None;
-
-        for lir_instruction in input {
+        for (index, lir_instruction) in input.iter().enumerate() {
             match lir_instruction {
                 // Handled during prepass
                 LIRInstruction::DefineVar { .. } | LIRInstruction::DropVar { .. } => {}
+
+                LIRInstruction::LoadIAConst { value } => {
+                    self.transform_load_const(index, &mut ia_register, *value)?
+                }
+                LIRInstruction::LoadIBConst { value } => {
+                    self.transform_load_const(index, &mut ib_register, *value)?
+                }
+
+                LIRInstruction::LoadIAVar { id } => {
+                    self.transform_load_var(index, &mut ia_register, *id)?
+                }
+                LIRInstruction::LoadIBVar { id } => {
+                    self.transform_load_var(index, &mut ib_register, *id)?
+                }
 
                 _ => todo!(),
             }
         }
 
-        Ok(output)
+        Ok(self.output.drain(..).collect())
     }
 }

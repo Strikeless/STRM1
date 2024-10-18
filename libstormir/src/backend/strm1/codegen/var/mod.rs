@@ -27,8 +27,8 @@ pub enum VarKey {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VarAllocation {
+    pub kind: VarAllocationKind,
     definition: VarDefinition,
-    kind: VarAllocationKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
