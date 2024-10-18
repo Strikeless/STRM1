@@ -93,7 +93,10 @@ impl Cli {
 
                 info!("PC:          {:05}", self.emulator.pc);
                 info!("Deassembled: {}", instruction_deassembly);
-                info!("Registers:   {:05?}", self.emulator.reg_file.array_clone_untraced());
+                info!(
+                    "Registers:   {:05?}",
+                    self.emulator.reg_file.array_clone_untraced()
+                );
                 info!("ALU flags:   {:?}", set_alu_flags);
             }
 
@@ -101,14 +104,15 @@ impl Cli {
                 let addr: Word = cmd_args.next_parsed()??;
                 let len: Word = cmd_args.next_parsed()??;
 
-                let words = (addr .. addr + len).step_by(2)
+                let words = (addr..addr + len)
+                    .step_by(2)
                     .map(|addr| self.emulator.memory.word(addr).unwrap_or(0))
                     .collect::<Vec<_>>();
 
-                let bytes = (addr .. addr + len)
+                let bytes = (addr..addr + len)
                     .map(|addr| self.emulator.memory.byte(addr).unwrap_or(0))
                     .collect::<Vec<_>>();
-                
+
                 let output = match cmd_args.next()? {
                     "db" | "decb" => format!("{:?}", bytes),
                     "dw" | "decw" => format!("{:?}", words),
@@ -116,7 +120,13 @@ impl Cli {
                     "xw" | "hexw" => format!("{:x?}", words),
                     // No binary because apparently {:b?} wont do for whatever reason.
                     "s" | "utf8" => String::from_utf8_lossy(&bytes).to_string(),
-                    _ => return Err(CommandError::ParseError("Output format should be [d]ec(b/w), he[x](b/w), or utf8 [s]".to_string()).into())
+                    _ => {
+                        return Err(CommandError::ParseError(
+                            "Output format should be [d]ec(b/w), he[x](b/w), or utf8 [s]"
+                                .to_string(),
+                        )
+                        .into())
+                    }
                 };
 
                 info!("Dump {}..{}: {}", addr, addr + len, output);

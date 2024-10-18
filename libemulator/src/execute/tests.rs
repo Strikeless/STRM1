@@ -1,4 +1,7 @@
-use libstrmisa::{instruction::{kind::InstructionKind, Instruction}, Word};
+use libstrmisa::{
+    instruction::{kind::InstructionKind, Instruction},
+    Word,
+};
 
 use crate::{tracing::pc::PCTraceData, Emulator};
 
