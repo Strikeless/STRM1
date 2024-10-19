@@ -7,3 +7,9 @@ edition = "2021"
 anyhow = "1.0"
 
 libstrmisa = { path = "../libstrmisa" }
+
+[dev-dependencies]
+lazy_static = "1.5"
+itertools = "0.13"
+
+libemulator = { path = "../libemulator" } # Used for testing backend codegen

@@ -110,15 +110,9 @@ fn exec(instructions: Vec<Instruction>) -> Emulator<PCTraceData> {
         .collect();
 
     let mut emulator = Emulator::new(Word::MAX, program).unwrap();
-
-    loop {
-        if let ExecuteOk::Halted = emulator
-            .execute_instruction()
-            .expect("Error executing instruction")
-        {
-            break;
-        }
-    }
+    emulator
+        .execute_to_halt()
+        .expect("Error executing instruction");
 
     emulator
 }

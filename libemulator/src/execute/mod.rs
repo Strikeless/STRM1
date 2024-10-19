@@ -11,6 +11,7 @@ mod parsed;
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecuteOk {
     Normal,
     Halted,
@@ -29,6 +30,16 @@ impl<T> Emulator<T>
 where
     T: TraceData,
 {
+    pub fn execute_to_halt(&mut self) -> Result<(), ExecuteErr> {
+        loop {
+            let state = self.execute_instruction()?;
+
+            if state == ExecuteOk::Halted {
+                break Ok(());
+            }
+        }
+    }
+
     pub fn execute_instruction(&mut self) -> Result<ExecuteOk, ExecuteErr> {
         self.current_trace = T::trace_from_state(&self);
         let instruction = self.parse_next_instruction()?;

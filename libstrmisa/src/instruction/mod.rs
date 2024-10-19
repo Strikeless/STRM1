@@ -7,13 +7,13 @@ use crate::{Immediate, Register, Word};
 
 pub mod kind;
 
-#[derive(Debug, Error, Clone, Copy)]
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum InstructionAssemblyError {
     #[error("Missing immediate")]
     MissingImmediate,
 }
 
-#[derive(Debug, Error, Clone, Copy)]
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
 pub enum InstructionDeassemblyError {
     #[error("Unrecognized opcode")]
     UnrecognizedOpcode,
@@ -28,7 +28,7 @@ pub struct Instruction {
 }
 
 impl Instruction {
-    pub fn new(kind: InstructionKind) -> Self {
+    pub const fn new(kind: InstructionKind) -> Self {
         Self {
             kind,
             reg_a: None,
@@ -37,17 +37,17 @@ impl Instruction {
         }
     }
 
-    pub fn with_reg_a(mut self, reg_a: Register) -> Self {
+    pub const fn with_reg_a(mut self, reg_a: Register) -> Self {
         self.reg_a = Some(reg_a);
         self
     }
 
-    pub fn with_reg_b(mut self, reg_b: Register) -> Self {
+    pub const fn with_reg_b(mut self, reg_b: Register) -> Self {
         self.reg_b = Some(reg_b);
         self
     }
 
-    pub fn with_immediate(mut self, immediate: Immediate) -> Self {
+    pub const fn with_immediate(mut self, immediate: Immediate) -> Self {
         self.immediate = Some(immediate);
         self
     }

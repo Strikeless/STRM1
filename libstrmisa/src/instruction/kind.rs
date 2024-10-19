@@ -66,7 +66,7 @@ impl InstructionKind {
             .expect("No opcode mapping for instruction kind")
     }
 
-    pub fn has_immediate(&self) -> bool {
+    pub const fn has_immediate(&self) -> bool {
         match self {
             // I can't wait to debug for hours when I eventually add another
             // instruction with an immediate but forget to add it here.

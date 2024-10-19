@@ -1,5 +1,6 @@
 pub type LIRVarId = usize;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LIRInstruction {
     /// Define variable with the given ID.
     DefineVar { id: LIRVarId },
@@ -26,7 +27,7 @@ pub enum LIRInstruction {
     LoadIBLabel,
 
     /// Store value of output accumulator to variable.
-    /// NOTE: This instruction is allowed to drop loaded input accumulators. This may simplify backend codegen.
+    /// NOTE: This instruction is allowed to forget loaded accumulators. This may simplify backend codegen.
     ///       Always load input accumulators again after a store if needed. You're on your own otherwise.
     StoreOVar { id: LIRVarId },
 
@@ -44,4 +45,7 @@ pub enum LIRInstruction {
 
     /// If value in input accumulator A is zero, Move code execution to address in input accumulator B.
     GotoIfZero,
+
+    /// Native machine code pass-through. May or may not be validated.
+    NativeMachinecode { code: Vec<u8> },
 }

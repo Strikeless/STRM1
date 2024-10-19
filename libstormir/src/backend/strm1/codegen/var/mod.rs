@@ -42,6 +42,7 @@ impl VarAllocationKind {
         matches!(self, VarAllocationKind::Register(..))
     }
 
+    #[allow(dead_code)] // Shut up
     pub fn is_memory(&self) -> bool {
         matches!(self, VarAllocationKind::Memory(..))
     }
@@ -63,6 +64,7 @@ impl Default for VarTable {
             // FIXME: It's stupid that we're instantly allocating the usage map for the entire memory space,
             //        but find_free doesn't work as expected if the vector isn't already filled.
             //        Maybe add a maximum size to RangedUsageMap and let it handle this stuff?
+            // BUG: FIXME: This will also overwrite program memory which isn't very nice, might want to handle that soon.
             mem_usage: RangedUsageMap(vec![Vec::new(); Word::MAX as usize]),
         }
     }

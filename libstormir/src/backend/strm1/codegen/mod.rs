@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use libstrmisa::{
     instruction::{kind::InstructionKind, Instruction},
     Register, Word,
@@ -12,16 +12,19 @@ use crate::{
 
 mod var;
 
+#[cfg(test)]
+mod tests;
+
 pub struct STRM1CodegenTransformer {
-    var_table: VarTable,
     output: Vec<Instruction>,
+    var_table: VarTable,
 }
 
 impl STRM1CodegenTransformer {
     pub fn new() -> Self {
         Self {
-            var_table: VarTable::default(),
             output: Vec::new(),
+            var_table: VarTable::default(),
         }
     }
 
@@ -74,6 +77,47 @@ impl STRM1CodegenTransformer {
         Ok(())
     }
 
+    fn transform_load_label(
+        &mut self,
+        index: usize,
+        acc_reg: &mut Option<Register>,
+    ) -> anyhow::Result<()> {
+        let label_addr = self
+            .output
+            .len()
+            .try_into()
+            .context("Label out of maximum address space")?;
+        self.transform_load_const(index, acc_reg, label_addr)
+    }
+
+    fn transform_accumulator_instruction(
+        &mut self,
+        index: usize,
+        instruction_kind: InstructionKind,
+        o: &mut Option<Register>,
+        ia: &Option<Register>,
+        ib: &Option<Register>,
+    ) -> anyhow::Result<()> {
+        let o_var = self.special_var(index).unwrap().kind;
+        let o_reg = o_var.as_register().unwrap();
+        *o = Some(o_reg);
+
+        let ia = ia.context("Input accumulator A not set")?;
+        let ib = ib.context("Input accumulator B not set")?;
+
+        self.output.extend([
+            // Copy IA to O to not mutate IA
+            Instruction::new(InstructionKind::Cpy)
+                .with_reg_a(o_reg)
+                .with_reg_b(ia),
+            Instruction::new(instruction_kind)
+                .with_reg_a(o_reg)
+                .with_reg_b(ib),
+        ]);
+
+        Ok(())
+    }
+
     fn special_var(&self, index: usize) -> anyhow::Result<&VarAllocation> {
         self.var_table
             .get(VarKey::Special(index))
@@ -96,22 +140,28 @@ impl Transformer for STRM1CodegenTransformer {
 
         let mut ia_definition_key = None;
         let mut ib_definition_key = None;
+        let mut o_definition_key = None;
 
-        fn define_load_label(
+        fn alloc_accumulator(
             index: usize,
             var_table_builder: &mut VarTableBuilder,
             definition_key: &mut Option<VarKey>,
         ) {
-            let key = VarKey::Special(index);
-
             // Previous input accumulator allocation can be dropped as we overwrite it here.
-            if let Some(previous_key) = definition_key.take() {
-                var_table_builder.drop(previous_key, 0).unwrap();
-            }
+            dealloc_accumulator(var_table_builder, definition_key);
 
+            let key = VarKey::Special(index);
             var_table_builder.define(key, true).unwrap();
-
             *definition_key = Some(key);
+        }
+
+        fn dealloc_accumulator(
+            var_table_builder: &mut VarTableBuilder,
+            definition_key: &mut Option<VarKey>,
+        ) {
+            if let Some(definition_key) = definition_key.take() {
+                var_table_builder.drop(definition_key, 0).unwrap();
+            }
         }
 
         for (index, lir_instruction) in input.iter().enumerate() {
@@ -119,9 +169,11 @@ impl Transformer for STRM1CodegenTransformer {
 
             match lir_instruction {
                 LIRInstruction::DefineVar { id } => {
-                    var_table_builder.define(VarKey::Normal(*id), false)?
+                    var_table_builder.define(VarKey::Normal(*id), false)?;
                 }
-                LIRInstruction::DropVar { id } => var_table_builder.drop(VarKey::Normal(*id), 0)?,
+                LIRInstruction::DropVar { id } => {
+                    var_table_builder.drop(VarKey::Normal(*id), 0)?;
+                }
 
                 //
                 // Loads to input accumulators need a special register allocation to hold the value in
@@ -129,24 +181,21 @@ impl Transformer for STRM1CodegenTransformer {
                 LIRInstruction::LoadIAConst { .. }
                 | LIRInstruction::LoadIAVar { .. }
                 | LIRInstruction::LoadIALabel => {
-                    define_load_label(index, &mut var_table_builder, &mut ia_definition_key)
+                    alloc_accumulator(index, &mut var_table_builder, &mut ia_definition_key);
                 }
 
                 LIRInstruction::LoadIBConst { .. }
                 | LIRInstruction::LoadIBVar { .. }
                 | LIRInstruction::LoadIBLabel => {
-                    define_load_label(index, &mut var_table_builder, &mut ib_definition_key)
+                    alloc_accumulator(index, &mut var_table_builder, &mut ib_definition_key);
                 }
 
                 LIRInstruction::StoreOVar { .. } => {
-                    // The LIR documentation allows dropping input accumulators (just specified it there hehe) upon
+                    // The LIR documentation allows dropping all accumulators (just specified it there hehe) upon
                     // an output accumulator store, so do that here for simplicity.
-                    if let Some(ia_definition_key) = ia_definition_key.take() {
-                        var_table_builder.drop(ia_definition_key, 0).unwrap();
-                    }
-                    if let Some(ib_definition_key) = ib_definition_key.take() {
-                        var_table_builder.drop(ib_definition_key, 0).unwrap();
-                    }
+                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key);
+                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key);
+                    dealloc_accumulator(&mut var_table_builder, &mut o_definition_key);
 
                     // NOTE: This is reserving a register for a memory address even if the target variable is in-register,
                     //       so small optimization opportunity here. With the current VarTable builder approach, we would
@@ -160,6 +209,10 @@ impl Transformer for STRM1CodegenTransformer {
                     var_table_builder.drop(key, 1).unwrap();
                 }
 
+                LIRInstruction::Cpy | LIRInstruction::Add | LIRInstruction::Sub => {
+                    alloc_accumulator(index, &mut var_table_builder, &mut o_definition_key);
+                }
+
                 _ => {}
             }
         }
@@ -171,6 +224,7 @@ impl Transformer for STRM1CodegenTransformer {
     fn transform(&mut self, input: Vec<Self::Input>) -> anyhow::Result<Vec<Self::Output>> {
         let mut ia_register = None;
         let mut ib_register = None;
+        let mut o_register = None;
 
         for (index, lir_instruction) in input.iter().enumerate() {
             match lir_instruction {
@@ -191,7 +245,87 @@ impl Transformer for STRM1CodegenTransformer {
                     self.transform_load_var(index, &mut ib_register, *id)?
                 }
 
-                _ => todo!(),
+                LIRInstruction::LoadIALabel => {
+                    self.transform_load_label(index, &mut ia_register)?
+                }
+                LIRInstruction::LoadIBLabel => {
+                    self.transform_load_label(index, &mut ib_register)?
+                }
+
+                LIRInstruction::StoreOVar { id } => {
+                    let acc_var = self.special_var(index)?;
+                    o_register = Some(acc_var.kind.as_register().unwrap());
+
+                    let var = self.var(*id)?;
+
+                    match var.kind {
+                        VarAllocationKind::Register(var_reg) => {
+                            self.output.extend([Instruction::new(InstructionKind::Cpy)
+                                .with_reg_a(var_reg)
+                                .with_reg_b(o_register.unwrap())]);
+                        }
+
+                        VarAllocationKind::Memory(var_addr) => {
+                            self.output.extend([
+                                Instruction::new(InstructionKind::LoadI)
+                                    .with_immediate(var_addr)
+                                    .with_reg_a(o_register.unwrap()),
+                                Instruction::new(InstructionKind::Load)
+                                    .with_reg_a(o_register.unwrap())
+                                    .with_reg_b(o_register.unwrap()),
+                            ]);
+                        }
+                    }
+                }
+
+                LIRInstruction::Add => {
+                    self.transform_accumulator_instruction(
+                        index,
+                        InstructionKind::Add,
+                        &mut o_register,
+                        &ia_register,
+                        &ib_register,
+                    )?;
+                }
+
+                LIRInstruction::Sub => {
+                    self.transform_accumulator_instruction(
+                        index,
+                        InstructionKind::Sub,
+                        &mut o_register,
+                        &ia_register,
+                        &ib_register,
+                    )?;
+                }
+
+                LIRInstruction::NativeMachinecode { code } => {
+                    let mut code_iter = code.iter().peekable();
+
+                    while code_iter.peek().is_some() {
+                        let mut next = || {
+                            code_iter
+                                .next()
+                                .map(|byte_ref| *byte_ref)
+                                .ok_or_else(|| anyhow!("Incomplete instruction"))
+                        };
+
+                        let instruction_word = libstrmisa::bytes_to_word([next()?, next()?]);
+                        let mut instruction_deassembled =
+                            Instruction::deassemble_instruction_word(instruction_word)
+                                .map_err(|e| anyhow!("Invalid instruction: {}", e))?;
+
+                        if instruction_deassembled.kind.has_immediate() {
+                            let immediate_word = libstrmisa::bytes_to_word([next()?, next()?]);
+                            instruction_deassembled.immediate = Some(immediate_word);
+                        }
+
+                        self.output.push(instruction_deassembled);
+                    }
+                }
+
+                x => {
+                    todo!("{:?}", x)
+                }
             }
         }
 
