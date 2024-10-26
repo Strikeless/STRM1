@@ -5,7 +5,7 @@ pub enum LIRInstruction {
     /// Define variable with the given ID.
     DefineVar { id: LIRVarId },
 
-    /// Mark variable as unused and as to be deallocated.
+    /// Mark variable as unused and to be deallocated.
     DropVar { id: LIRVarId },
 
     /// Load constant value to input accumulator A.

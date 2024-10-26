@@ -16,6 +16,9 @@ lazy_static! {
     };
 }
 
+// TODO: Make the backend emit tracing data for variables so emulated tests can access the correct
+//       registers / memory addresses without any hackery like the currently used single_reg method.
+
 #[test]
 fn addition_emulated() {
     let a = 1;
@@ -54,11 +57,13 @@ fn two_additions_emulated() {
     let expected_second = expected_first + c;
 
     let test = EmulatorTest::new(vec![
+        // First addition: var 0 = a + b
         LIRInstruction::LoadIAConst { value: a },
         LIRInstruction::LoadIBConst { value: b },
         LIRInstruction::Add,
         LIRInstruction::DefineVar { id: 0 },
         LIRInstruction::StoreOVar { id: 0 },
+        // Second addition: var 1 = var 0 + c
         LIRInstruction::LoadIAVar { id: 0 },
         LIRInstruction::LoadIBConst { value: c },
         LIRInstruction::DefineVar { id: 1 },
@@ -82,6 +87,82 @@ fn two_additions_emulated() {
             "two_additions",
             format!("Not exactly one expected second value in register: {}", e),
         );
+    }
+}
+
+#[test]
+fn chained_additions_emulated() {
+    let a = 1;
+    let b = 2;
+    let c = 3;
+
+    let expected = a + b + c;
+
+    let test = EmulatorTest::new(vec![
+        // First addition: a + b
+        LIRInstruction::LoadIAConst { value: a },
+        LIRInstruction::LoadIBConst { value: b },
+        LIRInstruction::Add,
+        // Second addition: previous + c
+        LIRInstruction::LoadIBConst { value: c },
+        // Store to var 0
+        LIRInstruction::DefineVar { id: 0 },
+        LIRInstruction::StoreOVar { id: 0 },
+        LIR_HALT.clone(),
+    ])
+    .unwrap();
+
+    let result = test.single_reg(|(_, value)| *value == expected);
+
+    // The error type doesn't implement Debug so we can't use expect, seems to implement Display though...
+    if let Err(e) = result {
+        test.dump_panic(
+            "chained_additions",
+            format!("Not exactly one expected value in register: {}", e),
+        );
+    }
+}
+
+#[test]
+// It would be a shame if the other tests failed or succeeded randomly. Determinism isn't exactly something we need
+// in this codegen, but so far I've only seen non-determinism be caused by actual problems that should be found.
+// This test mostly focuses on variable allocations, most instructions aren't even used.
+fn determinism() {
+    // Complete nonsense LIR that still compiles.
+    let program_lir = vec![
+        LIRInstruction::DefineVar { id: 0 },
+        LIRInstruction::DefineVar { id: 2 },
+        LIRInstruction::LoadIAConst { value: 123 },
+        LIRInstruction::DropVar { id: 0 },
+        LIRInstruction::LoadIBConst { value: 14723 },
+        LIRInstruction::DefineVar { id: 1 },
+        LIRInstruction::Add,
+        LIRInstruction::Sub,
+        LIRInstruction::DefineVar { id: 3 },
+        LIR_HALT.clone(),
+        LIRInstruction::DropVar { id: 2 },
+        LIRInstruction::Add,
+        LIRInstruction::Cpy,
+        LIR_HALT.clone(),
+        LIRInstruction::StoreOVar { id: 2 },
+    ];
+
+    let mut previous_compilation = strm1::transformer()
+        .run(program_lir.clone())
+        .expect("Compilation failed on first run");
+
+    for i in 2..=50 {
+        let new_compilation = strm1::transformer()
+            .run(program_lir.clone())
+            .expect(&format!("Compilation failed on run {}", i));
+
+        assert_eq!(
+            previous_compilation, new_compilation,
+            "Compilations differed on run {}",
+            i
+        );
+
+        previous_compilation = new_compilation;
     }
 }
 
@@ -122,7 +203,7 @@ impl EmulatorTest {
         let file_path = dir_path.join(PathBuf::from(name).with_extension("bin"));
 
         println!(
-            "Dumping program binary in '{}'",
+            "Dumping generated program binary to '{}'",
             file_path.to_string_lossy().to_string()
         );
 
