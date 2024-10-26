@@ -1,10 +1,11 @@
 use std::{fs, path::PathBuf, process::exit};
 
 use anyhow::anyhow;
-use clap::Parser;
+use clap::{builder::Str, Parser};
 use command::{Command, CommandError};
+use libdeassembler::Deassembler;
 use libemulator::{tracing::none::NoTraceData, Emulator};
-use libstrmisa::{instruction::Instruction, Word};
+use libisa::{instruction::Instruction, Word};
 use log::{error, info, LevelFilter};
 
 mod command;
@@ -86,13 +87,8 @@ impl Cli {
                     .map(|(name, _)| name.replace('"', ""))
                     .collect::<Vec<_>>();
 
-                let instruction_deassembly = match self.deassemble_pc_instruction() {
-                    Ok(s) => s,
-                    Err(s) => s,
-                };
-
                 info!("PC:          {:05}", self.emulator.pc);
-                info!("Deassembled: {}", instruction_deassembly);
+                info!("Deassembled: {}", self.deassemble_pc_instruction());
                 info!(
                     "Registers:   {:05?}",
                     self.emulator.reg_file.array_clone_untraced()
@@ -145,26 +141,14 @@ impl Cli {
         Ok(())
     }
 
-    fn deassemble_pc_instruction(&self) -> Result<String, String> {
-        let instruction_word = self
-            .emulator
-            .memory
-            .word(self.emulator.pc)
-            .ok_or("<out of bounds>".to_string())?;
-
-        let mut instruction = Instruction::deassemble_instruction_word(instruction_word)
-            .map_err(|e| format!("<{}>", e))?;
-
-        if instruction.kind.has_immediate() {
-            let immediate = self
-                .emulator
+    fn deassemble_pc_instruction(&self) -> String {
+        let mut deassembler = Deassembler::new(
+            self.emulator
                 .memory
-                .word(self.emulator.pc + libstrmisa::BYTES_PER_WORD as Word)
-                .ok_or("<immediate out of bounds>")?;
+                .iter_untraced()
+                .skip(self.emulator.pc as usize),
+        );
 
-            instruction.immediate = Some(immediate);
-        }
-
-        Ok(format!("{}", instruction))
+        deassembler.deassemble_instruction_ignorant()
     }
 }

@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0"
 
-libstrmisa = { path = "../libstrmisa" }
+libisa = { path = "../libisa" }
 
 [dev-dependencies]
 lazy_static = "1.5"

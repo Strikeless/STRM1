@@ -5,7 +5,7 @@ use super::Memory;
 #[test]
 fn word_mut_patches_correctly() {
     let magic = 0xABCD;
-    let expected_data = libstrmisa::word_to_bytes(magic);
+    let expected_data = libisa::word_to_bytes(magic);
 
     let mut memory = Memory::<NoTraceData>::new(vec![0; 2]);
     *memory.word_mut_untraced(0).unwrap() = magic;

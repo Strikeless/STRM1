@@ -1,11 +1,9 @@
-use libstrmisa::{
+use libisa::{
     instruction::{kind::InstructionKind, Instruction},
     Word,
 };
 
 use crate::{tracing::pc::PCTraceData, Emulator};
-
-use super::ExecuteOk;
 
 #[test]
 fn nop_and_halt() {
@@ -84,17 +82,10 @@ fn register_traces() {
     let trace_a = emulator.reg_file.trace(reg_a).unwrap();
     let trace_b = emulator.reg_file.trace(reg_b).unwrap();
 
-    assert_eq!(
-        trace_a.traces,
-        [1 * libstrmisa::BYTES_PER_WORD],
-        "register A"
-    );
+    assert_eq!(trace_a.traces, [1 * libisa::BYTES_PER_WORD], "register A");
     assert_eq!(
         trace_b.traces,
-        [
-            3 * libstrmisa::BYTES_PER_WORD,
-            5 * libstrmisa::BYTES_PER_WORD
-        ],
+        [3 * libisa::BYTES_PER_WORD, 5 * libisa::BYTES_PER_WORD],
         "register B"
     );
 }

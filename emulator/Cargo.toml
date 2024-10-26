@@ -12,4 +12,5 @@ log = "0.4"
 env_logger = "0.11"
 
 libemulator = { path = "../libemulator" }
-libstrmisa = { path = "../libstrmisa" }
+libisa = { path = "../libisa" }
+libdeassembler = { path = "../libdeassembler" }

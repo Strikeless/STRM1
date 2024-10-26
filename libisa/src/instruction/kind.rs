@@ -66,6 +66,20 @@ impl InstructionKind {
             .expect("No opcode mapping for instruction kind")
     }
 
+    pub const fn has_reg_a(&self) -> bool {
+        match self {
+            Self::Nop | Self::Halt => false,
+            _ => true,
+        }
+    }
+
+    pub const fn has_reg_b(&self) -> bool {
+        match self {
+            Self::Nop | Self::LoadI | Self::Jmp | Self::JmpC | Self::JmpZ | Self::Halt => false,
+            _ => true,
+        }
+    }
+
     pub const fn has_immediate(&self) -> bool {
         match self {
             // I can't wait to debug for hours when I eventually add another

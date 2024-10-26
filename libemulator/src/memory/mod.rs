@@ -1,4 +1,4 @@
-use libstrmisa::Word;
+use libisa::Word;
 use wordmut::MemoryWordMutPatch;
 
 use crate::tracing::{TraceData, Traced};
@@ -47,7 +47,7 @@ where
         let first_word = self.byte(addr)?;
         let second_word = self.byte(addr + 1)?;
 
-        Some(libstrmisa::bytes_to_word([first_word, second_word]))
+        Some(libisa::bytes_to_word([first_word, second_word]))
     }
 
     pub fn word_mut(&mut self, trace: T::Trace, addr: Word) -> Option<MemoryWordMutPatch<T>> {

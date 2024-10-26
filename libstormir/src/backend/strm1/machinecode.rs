@@ -1,4 +1,4 @@
-use libstrmisa::instruction::Instruction;
+use libisa::instruction::Instruction;
 
 use crate::transformer::Transformer;
 

@@ -1,5 +1,5 @@
 use flags::ALUFlags;
-use libstrmisa::Word;
+use libisa::Word;
 
 pub mod flags;
 

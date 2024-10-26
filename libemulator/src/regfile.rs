@@ -1,10 +1,10 @@
 use std::array;
 
-use libstrmisa::Word;
+use libisa::Word;
 
 use crate::tracing::{TraceData, Traced};
 
-pub struct RegFile<T>([Traced<Word, T>; libstrmisa::REGISTER_COUNT])
+pub struct RegFile<T>([Traced<Word, T>; libisa::REGISTER_COUNT])
 where
     T: TraceData;
 
@@ -20,7 +20,7 @@ where
         self.0.iter().map(|traced| traced.value())
     }
 
-    pub fn array_clone_untraced(&self) -> [Word; libstrmisa::REGISTER_COUNT] {
+    pub fn array_clone_untraced(&self) -> [Word; libisa::REGISTER_COUNT] {
         self.0.clone().map(|traced| *traced.value())
     }
 

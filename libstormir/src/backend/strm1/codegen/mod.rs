@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context};
-use libstrmisa::{
+use libisa::{
     instruction::{kind::InstructionKind, Instruction},
     Register, Word,
 };
@@ -27,7 +27,226 @@ impl STRM1CodegenTransformer {
             var_table: VarTable::default(),
         }
     }
+}
 
+impl Transformer for STRM1CodegenTransformer {
+    type Input = LIRInstruction;
+    type Output = Instruction;
+
+    fn prepass(&mut self, input: &Vec<Self::Input>) -> anyhow::Result<()> {
+        let mut var_table_builder = VarTableBuilder::new();
+
+        let mut ia_definition_key = None;
+        let mut ib_definition_key = None;
+        let mut o_definition_key = None;
+
+        fn alloc_accumulator(
+            index: usize,
+            var_table_builder: &mut VarTableBuilder,
+            definition_key: &mut Option<VarKey>,
+        ) -> anyhow::Result<()> {
+            // Previous input accumulator allocation can be dropped as we overwrite it here.
+            dealloc_accumulator(var_table_builder, definition_key)?;
+
+            let key = VarKey::Special(index);
+            var_table_builder.define(key, true)?;
+            *definition_key = Some(key);
+
+            Ok(())
+        }
+
+        fn dealloc_accumulator(
+            var_table_builder: &mut VarTableBuilder,
+            definition_key: &mut Option<VarKey>,
+        ) -> anyhow::Result<()> {
+            if let Some(definition_key) = definition_key.take() {
+                var_table_builder.drop(definition_key, 0)?;
+            }
+
+            Ok(())
+        }
+
+        for (index, lir_instruction) in input.iter().enumerate() {
+            var_table_builder.set_current_index(index);
+
+            match lir_instruction {
+                LIRInstruction::DefineVar { id } => {
+                    var_table_builder.define(VarKey::Normal(*id), false)?;
+                }
+                LIRInstruction::DropVar { id } => {
+                    var_table_builder.drop(VarKey::Normal(*id), 0)?;
+                }
+
+                //
+                // Loads to input accumulators need a special register allocation to hold the value in
+                //
+                LIRInstruction::LoadIAConst { .. } | LIRInstruction::LoadIALabel => {
+                    alloc_accumulator(index, &mut var_table_builder, &mut ia_definition_key)?;
+                }
+                LIRInstruction::LoadIBConst { .. } | LIRInstruction::LoadIBLabel => {
+                    alloc_accumulator(index, &mut var_table_builder, &mut ib_definition_key)?;
+                }
+
+                LIRInstruction::LoadIAVar { id } => {
+                    alloc_accumulator(index, &mut var_table_builder, &mut ia_definition_key)?;
+                    var_table_builder.heaten(VarKey::Normal(*id))?
+                }
+                LIRInstruction::LoadIBVar { id } => {
+                    alloc_accumulator(index, &mut var_table_builder, &mut ib_definition_key)?;
+                    var_table_builder.heaten(VarKey::Normal(*id))?
+                }
+
+                LIRInstruction::StoreOVar { .. } => {
+                    // The LIR documentation allows dropping all accumulators (just specified it there hehe) upon
+                    // an output accumulator store, so do that here for simplicity.
+                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key)?;
+                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key)?;
+                    dealloc_accumulator(&mut var_table_builder, &mut o_definition_key)?;
+
+                    // Store needs a scratchpad register to store the address of an in-memory target variable.
+                    let key = VarKey::Special(index);
+
+                    var_table_builder.define(key, true).unwrap();
+
+                    // The register is only needed during execution of this instruction, so drop it by the next instruction.
+                    var_table_builder.drop(key, 1).unwrap();
+                }
+
+                LIRInstruction::Cpy | LIRInstruction::Add | LIRInstruction::Sub => {
+                    alloc_accumulator(index, &mut var_table_builder, &mut o_definition_key)?;
+                }
+
+                _ => {}
+            }
+        }
+
+        self.var_table = var_table_builder.build()?;
+        Ok(())
+    }
+
+    fn transform(&mut self, input: Vec<Self::Input>) -> anyhow::Result<Vec<Self::Output>> {
+        let mut ia_register = None;
+        let mut ib_register = None;
+        let mut o_register = None;
+
+        for (index, lir_instruction) in input.iter().enumerate() {
+            match lir_instruction {
+                // Handled during prepass
+                LIRInstruction::DefineVar { .. } | LIRInstruction::DropVar { .. } => {}
+
+                LIRInstruction::LoadIAConst { value } => {
+                    self.transform_load_const(index, &mut ia_register, *value)?
+                }
+                LIRInstruction::LoadIBConst { value } => {
+                    self.transform_load_const(index, &mut ib_register, *value)?
+                }
+
+                LIRInstruction::LoadIAVar { id } => {
+                    self.transform_load_var(index, &mut ia_register, *id)?
+                }
+                LIRInstruction::LoadIBVar { id } => {
+                    self.transform_load_var(index, &mut ib_register, *id)?
+                }
+
+                LIRInstruction::LoadIALabel => {
+                    self.transform_load_label(index, &mut ia_register)?
+                }
+                LIRInstruction::LoadIBLabel => {
+                    self.transform_load_label(index, &mut ib_register)?
+                }
+
+                LIRInstruction::StoreOVar { id } => {
+                    let acc_var = self.special_var(index)?;
+                    o_register = Some(acc_var.kind.as_register().unwrap());
+
+                    let var = self.var(*id)?;
+
+                    match var.kind {
+                        VarAllocationKind::Register(var_reg) => {
+                            self.output.extend([Instruction::new(InstructionKind::Cpy)
+                                .with_reg_a(var_reg)
+                                .with_reg_b(o_register.unwrap())]);
+                        }
+
+                        VarAllocationKind::Memory(var_addr) => {
+                            self.output.extend([
+                                Instruction::new(InstructionKind::LoadI)
+                                    .with_immediate(var_addr)
+                                    .with_reg_a(o_register.unwrap()),
+                                Instruction::new(InstructionKind::Load)
+                                    .with_reg_a(o_register.unwrap())
+                                    .with_reg_b(o_register.unwrap()),
+                            ]);
+                        }
+                    }
+                }
+
+                LIRInstruction::Cpy => {
+                    self.transform_accumulator_instruction(
+                        index,
+                        InstructionKind::Cpy,
+                        &mut o_register,
+                        &ia_register,
+                        &ib_register,
+                    )?;
+                }
+
+                LIRInstruction::Add => {
+                    self.transform_accumulator_instruction(
+                        index,
+                        InstructionKind::Add,
+                        &mut o_register,
+                        &ia_register,
+                        &ib_register,
+                    )?;
+                }
+
+                LIRInstruction::Sub => {
+                    self.transform_accumulator_instruction(
+                        index,
+                        InstructionKind::Sub,
+                        &mut o_register,
+                        &ia_register,
+                        &ib_register,
+                    )?;
+                }
+
+                LIRInstruction::NativeMachinecode { code } => {
+                    let mut code_iter = code.iter().peekable();
+
+                    while code_iter.peek().is_some() {
+                        let mut next = || {
+                            code_iter
+                                .next()
+                                .map(|byte_ref| *byte_ref)
+                                .ok_or_else(|| anyhow!("Incomplete instruction"))
+                        };
+
+                        let instruction_word = libisa::bytes_to_word([next()?, next()?]);
+                        let mut instruction_deassembled =
+                            Instruction::deassemble_instruction_word(instruction_word)
+                                .map_err(|e| anyhow!("Invalid instruction: {}", e))?;
+
+                        if instruction_deassembled.kind.has_immediate() {
+                            let immediate_word = libisa::bytes_to_word([next()?, next()?]);
+                            instruction_deassembled.immediate = Some(immediate_word);
+                        }
+
+                        self.output.push(instruction_deassembled);
+                    }
+                }
+
+                x => {
+                    todo!("{:?}", x)
+                }
+            }
+        }
+
+        Ok(self.output.drain(..).collect())
+    }
+}
+
+impl STRM1CodegenTransformer {
     fn transform_load_const(
         &mut self,
         index: usize,
@@ -128,207 +347,5 @@ impl STRM1CodegenTransformer {
         self.var_table
             .get(VarKey::Normal(id))
             .ok_or_else(|| anyhow!("Undefined variable"))
-    }
-}
-
-impl Transformer for STRM1CodegenTransformer {
-    type Input = LIRInstruction;
-    type Output = Instruction;
-
-    fn prepass(&mut self, input: &Vec<Self::Input>) -> anyhow::Result<()> {
-        let mut var_table_builder = VarTableBuilder::new();
-
-        let mut ia_definition_key = None;
-        let mut ib_definition_key = None;
-        let mut o_definition_key = None;
-
-        fn alloc_accumulator(
-            index: usize,
-            var_table_builder: &mut VarTableBuilder,
-            definition_key: &mut Option<VarKey>,
-        ) {
-            // Previous input accumulator allocation can be dropped as we overwrite it here.
-            dealloc_accumulator(var_table_builder, definition_key);
-
-            let key = VarKey::Special(index);
-            var_table_builder.define(key, true).unwrap();
-            *definition_key = Some(key);
-        }
-
-        fn dealloc_accumulator(
-            var_table_builder: &mut VarTableBuilder,
-            definition_key: &mut Option<VarKey>,
-        ) {
-            if let Some(definition_key) = definition_key.take() {
-                var_table_builder.drop(definition_key, 0).unwrap();
-            }
-        }
-
-        for (index, lir_instruction) in input.iter().enumerate() {
-            var_table_builder.set_current_index(index);
-
-            match lir_instruction {
-                LIRInstruction::DefineVar { id } => {
-                    var_table_builder.define(VarKey::Normal(*id), false)?;
-                }
-                LIRInstruction::DropVar { id } => {
-                    var_table_builder.drop(VarKey::Normal(*id), 0)?;
-                }
-
-                //
-                // Loads to input accumulators need a special register allocation to hold the value in
-                //
-                LIRInstruction::LoadIAConst { .. }
-                | LIRInstruction::LoadIAVar { .. }
-                | LIRInstruction::LoadIALabel => {
-                    alloc_accumulator(index, &mut var_table_builder, &mut ia_definition_key);
-                }
-
-                LIRInstruction::LoadIBConst { .. }
-                | LIRInstruction::LoadIBVar { .. }
-                | LIRInstruction::LoadIBLabel => {
-                    alloc_accumulator(index, &mut var_table_builder, &mut ib_definition_key);
-                }
-
-                LIRInstruction::StoreOVar { .. } => {
-                    // The LIR documentation allows dropping all accumulators (just specified it there hehe) upon
-                    // an output accumulator store, so do that here for simplicity.
-                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key);
-                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key);
-                    dealloc_accumulator(&mut var_table_builder, &mut o_definition_key);
-
-                    // NOTE: This is reserving a register for a memory address even if the target variable is in-register,
-                    //       so small optimization opportunity here. With the current VarTable builder approach, we would
-                    //       need atleast a second prepass in order to only reserve a register for in-memory variables.
-                    // Store needs a scratchpad register to store the address of an in-memory target variable.
-                    let key = VarKey::Special(index);
-
-                    var_table_builder.define(key, true).unwrap();
-
-                    // The register is only needed during execution of this instruction, so drop it by the next instruction.
-                    var_table_builder.drop(key, 1).unwrap();
-                }
-
-                LIRInstruction::Cpy | LIRInstruction::Add | LIRInstruction::Sub => {
-                    alloc_accumulator(index, &mut var_table_builder, &mut o_definition_key);
-                }
-
-                _ => {}
-            }
-        }
-
-        self.var_table = var_table_builder.build()?;
-        Ok(())
-    }
-
-    fn transform(&mut self, input: Vec<Self::Input>) -> anyhow::Result<Vec<Self::Output>> {
-        let mut ia_register = None;
-        let mut ib_register = None;
-        let mut o_register = None;
-
-        for (index, lir_instruction) in input.iter().enumerate() {
-            match lir_instruction {
-                // Handled during prepass
-                LIRInstruction::DefineVar { .. } | LIRInstruction::DropVar { .. } => {}
-
-                LIRInstruction::LoadIAConst { value } => {
-                    self.transform_load_const(index, &mut ia_register, *value)?
-                }
-                LIRInstruction::LoadIBConst { value } => {
-                    self.transform_load_const(index, &mut ib_register, *value)?
-                }
-
-                LIRInstruction::LoadIAVar { id } => {
-                    self.transform_load_var(index, &mut ia_register, *id)?
-                }
-                LIRInstruction::LoadIBVar { id } => {
-                    self.transform_load_var(index, &mut ib_register, *id)?
-                }
-
-                LIRInstruction::LoadIALabel => {
-                    self.transform_load_label(index, &mut ia_register)?
-                }
-                LIRInstruction::LoadIBLabel => {
-                    self.transform_load_label(index, &mut ib_register)?
-                }
-
-                LIRInstruction::StoreOVar { id } => {
-                    let acc_var = self.special_var(index)?;
-                    o_register = Some(acc_var.kind.as_register().unwrap());
-
-                    let var = self.var(*id)?;
-
-                    match var.kind {
-                        VarAllocationKind::Register(var_reg) => {
-                            self.output.extend([Instruction::new(InstructionKind::Cpy)
-                                .with_reg_a(var_reg)
-                                .with_reg_b(o_register.unwrap())]);
-                        }
-
-                        VarAllocationKind::Memory(var_addr) => {
-                            self.output.extend([
-                                Instruction::new(InstructionKind::LoadI)
-                                    .with_immediate(var_addr)
-                                    .with_reg_a(o_register.unwrap()),
-                                Instruction::new(InstructionKind::Load)
-                                    .with_reg_a(o_register.unwrap())
-                                    .with_reg_b(o_register.unwrap()),
-                            ]);
-                        }
-                    }
-                }
-
-                LIRInstruction::Add => {
-                    self.transform_accumulator_instruction(
-                        index,
-                        InstructionKind::Add,
-                        &mut o_register,
-                        &ia_register,
-                        &ib_register,
-                    )?;
-                }
-
-                LIRInstruction::Sub => {
-                    self.transform_accumulator_instruction(
-                        index,
-                        InstructionKind::Sub,
-                        &mut o_register,
-                        &ia_register,
-                        &ib_register,
-                    )?;
-                }
-
-                LIRInstruction::NativeMachinecode { code } => {
-                    let mut code_iter = code.iter().peekable();
-
-                    while code_iter.peek().is_some() {
-                        let mut next = || {
-                            code_iter
-                                .next()
-                                .map(|byte_ref| *byte_ref)
-                                .ok_or_else(|| anyhow!("Incomplete instruction"))
-                        };
-
-                        let instruction_word = libstrmisa::bytes_to_word([next()?, next()?]);
-                        let mut instruction_deassembled =
-                            Instruction::deassemble_instruction_word(instruction_word)
-                                .map_err(|e| anyhow!("Invalid instruction: {}", e))?;
-
-                        if instruction_deassembled.kind.has_immediate() {
-                            let immediate_word = libstrmisa::bytes_to_word([next()?, next()?]);
-                            instruction_deassembled.immediate = Some(immediate_word);
-                        }
-
-                        self.output.push(instruction_deassembled);
-                    }
-                }
-
-                x => {
-                    todo!("{:?}", x)
-                }
-            }
-        }
-
-        Ok(self.output.drain(..).collect())
     }
 }

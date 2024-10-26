@@ -1,12 +1,7 @@
 [package]
-name = "libemulator"
+name = "libdeassembler"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0"
-thiserror = "1.0"
-log = "0.4"
-bitflags = "2.6"
-
 libisa = { path = "../libisa" }

@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range};
 
 use anyhow::anyhow;
 use builder::{VarDefinition, VarTableBuilder};
-use libstrmisa::{Register, Word};
+use libisa::{Register, Word};
 
 use crate::lir::LIRVarId;
 
@@ -59,7 +59,7 @@ impl Default for VarTable {
     fn default() -> Self {
         Self {
             allocations: HashMap::default(),
-            reg_usage: RangedUsageMap(vec![Vec::new(); libstrmisa::REGISTER_COUNT]),
+            reg_usage: RangedUsageMap(vec![Vec::new(); libisa::REGISTER_COUNT]),
 
             // FIXME: It's stupid that we're instantly allocating the usage map for the entire memory space,
             //        but find_free doesn't work as expected if the vector isn't already filled.

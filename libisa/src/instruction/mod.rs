@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Display, Write};
 
 use kind::InstructionKind;
 use thiserror::Error;
@@ -90,9 +90,9 @@ impl Instruction {
 
         Ok(Self {
             kind,
-            // FIXME: Registers should be none if the instruction kind doesn't use them.
-            reg_a: Some(reg_a),
-            reg_b: Some(reg_b),
+            // Don't set registers if they're zero and the instruction doesn't use them.
+            reg_a: (reg_a != 0 || kind.has_reg_a()).then_some(reg_a),
+            reg_b: (reg_b != 0 || kind.has_reg_b()).then_some(reg_b),
             immediate: None,
         })
     }
@@ -100,9 +100,20 @@ impl Instruction {
 
 impl Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "{}({:?}, {:?}, {:?})",
-            self.kind, self.reg_a, self.reg_b, self.immediate
-        ))
+        f.write_fmt(format_args!("{}", self.kind))?;
+
+        if let Some(reg_a) = self.reg_a {
+            f.write_fmt(format_args!(" %{}", reg_a))?;
+        }
+
+        if let Some(reg_b) = self.reg_b {
+            f.write_fmt(format_args!(", %{}", reg_b))?;
+        }
+
+        if let Some(immediate) = self.immediate {
+            f.write_fmt(format_args!(", ${}", immediate))?;
+        }
+
+        Ok(())
     }
 }

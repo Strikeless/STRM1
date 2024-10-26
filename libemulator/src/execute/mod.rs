@@ -1,4 +1,4 @@
-use libstrmisa::{
+use libisa::{
     instruction::{Instruction, InstructionDeassemblyError},
     Register, Word,
 };
@@ -62,7 +62,7 @@ where
 
     fn pc_next_word(&mut self) -> Result<Word, ExecuteErr> {
         let data = self.mem_word(self.pc)?;
-        self.pc += libstrmisa::BYTES_PER_WORD as Word;
+        self.pc += libisa::BYTES_PER_WORD as Word;
         Ok(data)
     }
 

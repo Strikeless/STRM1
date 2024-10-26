@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use libstrmisa::Word;
+use libisa::Word;
 
 use crate::tracing::TraceData;
 
@@ -46,7 +46,7 @@ where
     fn drop(&mut self) {
         // Simultaneous mutable borrows to the same bytes aren't a data hazard since Rust's borrow checker won't allow that.
 
-        let bytes = libstrmisa::word_to_bytes(self.data);
+        let bytes = libisa::word_to_bytes(self.data);
 
         match self.trace {
             Some(trace) => {

@@ -2,7 +2,7 @@ use std::iter;
 
 use alu::ALU;
 use anyhow::anyhow;
-use libstrmisa::Word;
+use libisa::Word;
 use memory::Memory;
 use regfile::RegFile;
 use tracing::TraceData;

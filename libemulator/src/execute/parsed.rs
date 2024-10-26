@@ -1,4 +1,4 @@
-use libstrmisa::{
+use libisa::{
     instruction::{kind::InstructionKind, Instruction},
     Word,
 };
