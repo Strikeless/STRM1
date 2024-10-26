@@ -1,4 +1,4 @@
-use crate::backend::strm1::codegen::var::VarAllocationKind;
+use crate::backend::strm1::codegen::var::{VarAllocationKind, VarTable};
 
 use super::{builder::VarTableBuilder, VarKey};
 
@@ -72,4 +72,32 @@ fn forced_memory_alloc_by_needing_registers() {
         var.kind.is_memory(),
         "Variable that doesn't need register did not go to memory"
     );
+}
+
+#[test]
+// Having the variable allocator be deterministic helps crack down other bugs, and certainly isn't a bad thing anyway.
+fn determinism() {
+    fn build_var_table() -> VarTable {
+        let mut builder = VarTableBuilder::new();
+        builder.set_current_index(0);
+
+        for i in 0..2 {
+            builder.define(VarKey::Normal(i), false).unwrap();
+        }
+
+        builder.build().unwrap()
+    }
+
+    let mut previous_var_table = build_var_table();
+
+    for i in 2..=50 {
+        let new_var_table = build_var_table();
+
+        // assert_eq's output is hard to read even with a few allocations.
+        if previous_var_table.allocations != new_var_table.allocations {
+            panic!("Var table allocations differed on build {}", i);
+        }
+
+        previous_var_table = new_var_table;
+    }
 }

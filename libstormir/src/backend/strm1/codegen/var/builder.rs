@@ -1,11 +1,12 @@
-use std::{collections::HashMap, ops::Range};
+use std::ops::Range;
 
 use anyhow::anyhow;
+use indexmap::IndexMap;
 
 use super::{VarKey, VarTable};
 
 pub struct VarTableBuilder {
-    pub(super) definitions: HashMap<VarKey, VarDefinition>,
+    pub(super) definitions: IndexMap<VarKey, VarDefinition>,
     current_index: usize,
 }
 
@@ -28,7 +29,7 @@ impl VarDefinition {
 impl VarTableBuilder {
     pub fn new() -> Self {
         Self {
-            definitions: HashMap::new(),
+            definitions: IndexMap::new(),
             current_index: 0,
         }
     }

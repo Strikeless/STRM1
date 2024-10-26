@@ -1,7 +1,8 @@
-use std::{collections::HashMap, ops::Range};
+use std::ops::Range;
 
 use anyhow::anyhow;
 use builder::{VarDefinition, VarTableBuilder};
+use indexmap::IndexMap;
 use libisa::{Register, Word};
 
 use crate::lir::LIRVarId;
@@ -11,9 +12,9 @@ pub mod builder;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VarTable {
-    allocations: HashMap<VarKey, VarAllocation>,
+    allocations: IndexMap<VarKey, VarAllocation>,
 
     reg_usage: RangedUsageMap,
     mem_usage: RangedUsageMap,
@@ -58,7 +59,7 @@ impl VarAllocationKind {
 impl Default for VarTable {
     fn default() -> Self {
         Self {
-            allocations: HashMap::default(),
+            allocations: IndexMap::default(),
             reg_usage: RangedUsageMap(vec![Vec::new(); libisa::REGISTER_COUNT]),
 
             // FIXME: It's stupid that we're instantly allocating the usage map for the entire memory space,
@@ -166,7 +167,7 @@ impl VarTable {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct RangedUsageMap(Vec<Vec<(VarKey, Range<usize>)>>);
 
 impl RangedUsageMap {

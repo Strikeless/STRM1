@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0"
+indexmap = "2.6"
 
 libisa = { path = "../libisa" }
 
