@@ -30,10 +30,10 @@ impl STRM1CodegenTransformer {
 }
 
 impl Transformer for STRM1CodegenTransformer {
-    type Input = LIRInstruction;
-    type Output = Instruction;
+    type Input = Vec<LIRInstruction>;
+    type Output = Vec<Instruction>;
 
-    fn prepass(&mut self, input: &Vec<Self::Input>) -> anyhow::Result<()> {
+    fn prepass(&mut self, input: &Self::Input) -> anyhow::Result<()> {
         let mut var_table_builder = VarTableBuilder::new();
 
         let mut ia_definition_key = None;
@@ -124,7 +124,7 @@ impl Transformer for STRM1CodegenTransformer {
         Ok(())
     }
 
-    fn transform(&mut self, input: Vec<Self::Input>) -> anyhow::Result<Vec<Self::Output>> {
+    fn transform(&mut self, input: Self::Input) -> anyhow::Result<Self::Output> {
         let mut ia_register = None;
         let mut ib_register = None;
         let mut o_register = None;

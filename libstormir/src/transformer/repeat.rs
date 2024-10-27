@@ -1,6 +1,6 @@
 use anyhow::Context;
 
-use super::Transformer;
+use super::{runner::TransformerRunner, Transformer};
 
 pub struct RepeatTransformer<T> {
     inner: T,
@@ -14,20 +14,12 @@ where
     type Input = T::Input;
     type Output = T::Output;
 
-    fn transform(&mut self, input: Vec<Self::Input>) -> anyhow::Result<Vec<Self::Output>> {
-        let mut accumulator = input;
-
-        for repeat in 0..self.times {
-            self.inner
-                .prepass(&accumulator)
-                .context(format!("During prepass {}", repeat))?;
-            accumulator = self
-                .inner
-                .transform(accumulator)
-                .context(format!("During transformation {}", repeat))?;
-        }
-
-        Ok(accumulator)
+    fn transform(&mut self, input: Self::Input) -> anyhow::Result<Self::Output> {
+        (0..self.times).try_fold(input, |accumulator, repeat| {
+            TransformerRunner::new(&mut self.inner)
+                .run(accumulator)
+                .with_context(|| format!("On repeat {}", repeat))
+        })
     }
 }
 

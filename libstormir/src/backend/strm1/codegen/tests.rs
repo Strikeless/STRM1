@@ -8,7 +8,7 @@ use libisa::{
     Word,
 };
 
-use crate::{backend::strm1, lir::LIRInstruction, transformer::Transformer};
+use crate::{backend::strm1, lir::LIRInstruction, transformer::runner::TransformerRunner};
 
 lazy_static! {
     static ref LIR_HALT: LIRInstruction = LIRInstruction::NativeMachinecode {
@@ -147,12 +147,12 @@ fn determinism() {
         LIRInstruction::StoreOVar { id: 2 },
     ];
 
-    let mut previous_compilation = strm1::transformer()
+    let mut previous_compilation = TransformerRunner::new(&mut strm1::transformer())
         .run(program_lir.clone())
         .expect("Compilation failed on first run");
 
     for i in 2..=50 {
-        let new_compilation = strm1::transformer()
+        let new_compilation = TransformerRunner::new(&mut strm1::transformer())
             .run(program_lir.clone())
             .expect(&format!("Compilation failed on run {}", i));
 
@@ -173,7 +173,9 @@ struct EmulatorTest {
 
 impl EmulatorTest {
     pub fn new(program: Vec<LIRInstruction>) -> anyhow::Result<Self> {
-        let program = strm1::transformer().run(program).expect("Error compiling");
+        let program = TransformerRunner::new(&mut strm1::transformer())
+            .run(program)
+            .expect("Error compiling");
 
         let mut emulator = Emulator::new(Word::MAX, program.clone()).unwrap();
         emulator.execute_to_halt().expect("Error executing");

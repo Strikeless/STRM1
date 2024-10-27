@@ -1,6 +1,4 @@
-use anyhow::Context;
-
-use super::Transformer;
+use super::{runner::TransformerRunner, Transformer};
 
 pub struct ChainTransformer<A, B> {
     a: A,
@@ -15,21 +13,10 @@ where
     type Input = A::Input;
     type Output = B::Output;
 
-    fn transform(&mut self, input: Vec<Self::Input>) -> anyhow::Result<Vec<Self::Output>> {
-        self.a
-            .prepass(&input)
-            .context("During prepass by transformer A of chain")?;
-        let a_output = self
-            .a
-            .transform(input)
-            .context("During transformation by transformer A of chain")?;
+    fn transform(&mut self, input: Self::Input) -> anyhow::Result<Self::Output> {
+        let a_output = TransformerRunner::new(&mut self.a).run(input)?;
 
-        self.b
-            .prepass(&a_output)
-            .context("During prepass by transformer B of chain")?;
-        self.b
-            .transform(a_output)
-            .context("During transformation by transformer B of chain")
+        TransformerRunner::new(&mut self.b).run(a_output)
     }
 }
 

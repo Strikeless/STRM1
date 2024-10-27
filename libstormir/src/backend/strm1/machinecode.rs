@@ -5,10 +5,10 @@ use crate::transformer::Transformer;
 pub struct STRM1MachinecodeTransformer;
 
 impl Transformer for STRM1MachinecodeTransformer {
-    type Input = Instruction;
-    type Output = u8;
+    type Input = Vec<Instruction>;
+    type Output = Vec<u8>;
 
-    fn transform(&mut self, input: Vec<Self::Input>) -> anyhow::Result<Vec<Self::Output>> {
+    fn transform(&mut self, input: Self::Input) -> anyhow::Result<Self::Output> {
         let mut output = Vec::with_capacity(input.len());
 
         for instruction in input {
