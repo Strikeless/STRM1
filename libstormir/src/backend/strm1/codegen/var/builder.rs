@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use anyhow::anyhow;
 use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
 
 use super::{VarKey, VarTable};
 
@@ -10,7 +11,7 @@ pub struct VarTableBuilder {
     current_index: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) struct VarDefinition {
     pub key: VarKey,
     pub begin: usize,

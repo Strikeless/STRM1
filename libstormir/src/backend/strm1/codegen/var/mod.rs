@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use builder::{VarDefinition, VarTableBuilder};
 use indexmap::IndexMap;
 use libisa::{Register, Word};
+use serde::{Deserialize, Serialize};
 
 use crate::lir::LIRVarId;
 
@@ -14,25 +15,25 @@ mod tests;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VarTable {
-    allocations: IndexMap<VarKey, VarAllocation>,
+    pub allocations: IndexMap<VarKey, VarAllocation>,
 
     reg_usage: RangedUsageMap,
     mem_usage: RangedUsageMap,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum VarKey {
     Normal(LIRVarId),
     Special(LIRVarId),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VarAllocation {
     pub kind: VarAllocationKind,
     definition: VarDefinition,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VarAllocationKind {
     Register(Register),
     Memory(Word),

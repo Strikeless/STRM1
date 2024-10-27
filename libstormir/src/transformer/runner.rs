@@ -1,6 +1,6 @@
 use anyhow::Context;
 
-use super::Transformer;
+use super::{extra::Extra, Transformer};
 
 pub struct TransformerRunner<'a, T>
 where
@@ -17,7 +17,11 @@ where
         Self { transformer }
     }
 
-    pub fn run(&mut self, input: T::Input) -> anyhow::Result<T::Output> {
+    pub fn run(&mut self, input: T::Input) -> anyhow::Result<Extra<T::Output>> {
+        self.run_with_extras(Extra::new(input))
+    }
+
+    pub fn run_with_extras(&mut self, input: Extra<T::Input>) -> anyhow::Result<Extra<T::Output>> {
         self.transformer.prepass(&input).context("During prepass")?;
 
         self.transformer

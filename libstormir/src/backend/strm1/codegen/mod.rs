@@ -1,4 +1,7 @@
+use std::iter;
+
 use anyhow::{anyhow, Context};
+use indexmap::IndexMap;
 use libisa::{
     instruction::{kind::InstructionKind, Instruction},
     Register, Word,
@@ -7,7 +10,7 @@ use var::{builder::VarTableBuilder, VarAllocation, VarAllocationKind, VarKey, Va
 
 use crate::{
     lir::{LIRInstruction, LIRVarId},
-    transformer::Transformer,
+    transformer::{extra::Extra, Transformer},
 };
 
 mod var;
@@ -15,9 +18,17 @@ mod var;
 #[cfg(test)]
 mod tests;
 
+// Warning: big mess ahead
+
+pub const EXTRA_INSTRUCTION_MAPPINGS_KEY: &str = "strm1-instruction-mappings";
+pub const EXTRA_VAR_ALLOCATIONS_KEY_JSON: &str = "strm1-var-allocations-json";
+pub const EXTRA_VAR_ALLOCATIONS_KEY_RMP: &str = "strm1-var-allocations-rmp";
+
 pub struct STRM1CodegenTransformer {
     output: Vec<Instruction>,
     var_table: VarTable,
+
+    extra_instruction_mappings: Vec<usize>,
 }
 
 impl STRM1CodegenTransformer {
@@ -25,6 +36,8 @@ impl STRM1CodegenTransformer {
         Self {
             output: Vec::new(),
             var_table: VarTable::default(),
+
+            extra_instruction_mappings: Vec::new(),
         }
     }
 }
@@ -33,7 +46,7 @@ impl Transformer for STRM1CodegenTransformer {
     type Input = Vec<LIRInstruction>;
     type Output = Vec<Instruction>;
 
-    fn prepass(&mut self, input: &Self::Input) -> anyhow::Result<()> {
+    fn prepass(&mut self, input: &Extra<Self::Input>) -> anyhow::Result<()> {
         let mut var_table_builder = VarTableBuilder::new();
 
         let mut ia_definition_key = None;
@@ -66,7 +79,7 @@ impl Transformer for STRM1CodegenTransformer {
             Ok(())
         }
 
-        for (index, lir_instruction) in input.iter().enumerate() {
+        for (index, lir_instruction) in input.data.iter().enumerate() {
             var_table_builder.set_current_index(index);
 
             match lir_instruction {
@@ -124,12 +137,12 @@ impl Transformer for STRM1CodegenTransformer {
         Ok(())
     }
 
-    fn transform(&mut self, input: Self::Input) -> anyhow::Result<Self::Output> {
+    fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>> {
         let mut ia_register = None;
         let mut ib_register = None;
         let mut o_register = None;
 
-        for (index, lir_instruction) in input.iter().enumerate() {
+        for (index, lir_instruction) in input.data.iter().enumerate() {
             match lir_instruction {
                 // Handled during prepass
                 LIRInstruction::DefineVar { .. } | LIRInstruction::DropVar { .. } => {}
@@ -156,27 +169,39 @@ impl Transformer for STRM1CodegenTransformer {
                 }
 
                 LIRInstruction::StoreOVar { id } => {
-                    let acc_var = self.special_var(index)?;
-                    o_register = Some(acc_var.kind.as_register().unwrap());
+                    let o_register = o_register.context("StoreOVar without set O accumulator")?;
 
                     let var = self.var(*id)?;
 
                     match var.kind {
                         VarAllocationKind::Register(var_reg) => {
-                            self.output.extend([Instruction::new(InstructionKind::Cpy)
-                                .with_reg_a(var_reg)
-                                .with_reg_b(o_register.unwrap())]);
+                            // Simple register copy from O register to the variable's register.
+                            self.extend_output(
+                                index,
+                                [Instruction::new(InstructionKind::Cpy)
+                                    .with_reg_a(var_reg)
+                                    .with_reg_b(o_register)],
+                            );
                         }
 
                         VarAllocationKind::Memory(var_addr) => {
-                            self.output.extend([
-                                Instruction::new(InstructionKind::LoadI)
-                                    .with_immediate(var_addr)
-                                    .with_reg_a(o_register.unwrap()),
-                                Instruction::new(InstructionKind::Load)
-                                    .with_reg_a(o_register.unwrap())
-                                    .with_reg_b(o_register.unwrap()),
-                            ]);
+                            // Scratchpad register to hold the variable's memory address in.
+                            let addr_var = self.special_var(index)?;
+                            let addr_reg = addr_var.kind.as_register().unwrap();
+
+                            self.extend_output(
+                                index,
+                                [
+                                    // Load the variable address to the address scratchpad register.
+                                    Instruction::new(InstructionKind::LoadI)
+                                        .with_reg_a(addr_reg)
+                                        .with_immediate(var_addr),
+                                    // Store the data in O register to the address of the variable.
+                                    Instruction::new(InstructionKind::Store)
+                                        .with_reg_a(addr_reg)
+                                        .with_reg_b(o_register),
+                                ],
+                            );
                         }
                     }
                 }
@@ -232,7 +257,7 @@ impl Transformer for STRM1CodegenTransformer {
                             instruction_deassembled.immediate = Some(immediate_word);
                         }
 
-                        self.output.push(instruction_deassembled);
+                        self.extend_output(index, [instruction_deassembled]);
                     }
                 }
 
@@ -242,7 +267,42 @@ impl Transformer for STRM1CodegenTransformer {
             }
         }
 
-        Ok(self.output.drain(..).collect())
+        let output: Vec<_> = self.output.drain(..).collect();
+
+        let instruction_mappings_extra = {
+            let mappings: Vec<_> = self.extra_instruction_mappings.drain(..).collect();
+
+            if mappings.len() != output.len() {
+                panic!("Instruction mapping extras size doesn't match output size");
+            }
+
+            serde_json::to_string(&mappings).expect("Couldn't serialize instruction mapping extras")
+        };
+
+        let var_alloc_extra_json = {
+            // Must convert keys to string for serialization to work.
+            let allocs: IndexMap<_, _> = self
+                .var_table
+                .allocations
+                .iter()
+                .map(|(key, value)| (format!("{:?}", key), value))
+                .collect();
+
+            serde_json::to_string(&allocs)
+                .expect("Couldn't serialize var table allocations with serde_json")
+        };
+
+        let var_alloc_extra_rmp = rmp_serde::to_vec(&self.var_table.allocations)
+            .expect("Couldn't serialize var table allocations with rmp_serde");
+
+        Ok(input
+            .new_preserve_extras(output)
+            .with_extra(
+                EXTRA_INSTRUCTION_MAPPINGS_KEY,
+                instruction_mappings_extra.bytes(),
+            )
+            .with_extra(EXTRA_VAR_ALLOCATIONS_KEY_JSON, var_alloc_extra_json.bytes())
+            .with_extra(EXTRA_VAR_ALLOCATIONS_KEY_RMP, var_alloc_extra_rmp))
     }
 }
 
@@ -256,9 +316,12 @@ impl STRM1CodegenTransformer {
         let acc_var = self.special_var(index)?;
         *acc_reg = Some(acc_var.kind.as_register().unwrap());
 
-        self.output.extend([Instruction::new(InstructionKind::LoadI)
-            .with_reg_a(acc_reg.unwrap())
-            .with_immediate(value)]);
+        self.extend_output(
+            index,
+            [Instruction::new(InstructionKind::LoadI)
+                .with_reg_a(acc_reg.unwrap())
+                .with_immediate(value)],
+        );
 
         Ok(())
     }
@@ -277,20 +340,24 @@ impl STRM1CodegenTransformer {
         match var.kind {
             // Simple register copy. This could be made to be a no-op, but that would make variable
             // allocation more complex, and I think it's simpler to optimize this away later on.
-            VarAllocationKind::Register(var_reg) => {
-                self.output.extend([Instruction::new(InstructionKind::Cpy)
+            VarAllocationKind::Register(var_reg) => self.extend_output(
+                index,
+                [Instruction::new(InstructionKind::Cpy)
                     .with_reg_a(acc_reg.unwrap())
-                    .with_reg_b(var_reg)])
-            }
+                    .with_reg_b(var_reg)],
+            ),
 
-            VarAllocationKind::Memory(var_addr) => self.output.extend([
-                Instruction::new(InstructionKind::LoadI)
-                    .with_reg_a(acc_reg.unwrap())
-                    .with_immediate(var_addr),
-                Instruction::new(InstructionKind::Load)
-                    .with_reg_a(acc_reg.unwrap())
-                    .with_reg_b(acc_reg.unwrap()),
-            ]),
+            VarAllocationKind::Memory(var_addr) => self.extend_output(
+                index,
+                [
+                    Instruction::new(InstructionKind::LoadI)
+                        .with_reg_a(acc_reg.unwrap())
+                        .with_immediate(var_addr),
+                    Instruction::new(InstructionKind::Load)
+                        .with_reg_a(acc_reg.unwrap())
+                        .with_reg_b(acc_reg.unwrap()),
+                ],
+            ),
         }
 
         Ok(())
@@ -324,17 +391,30 @@ impl STRM1CodegenTransformer {
         let ia = ia.context("Input accumulator A not set")?;
         let ib = ib.context("Input accumulator B not set")?;
 
-        self.output.extend([
-            // Copy IA to O to not mutate IA
-            Instruction::new(InstructionKind::Cpy)
-                .with_reg_a(o_reg)
-                .with_reg_b(ia),
-            Instruction::new(instruction_kind)
-                .with_reg_a(o_reg)
-                .with_reg_b(ib),
-        ]);
+        self.extend_output(
+            index,
+            [
+                // Copy IA to O to not mutate IA
+                Instruction::new(InstructionKind::Cpy)
+                    .with_reg_a(o_reg)
+                    .with_reg_b(ia),
+                Instruction::new(instruction_kind)
+                    .with_reg_a(o_reg)
+                    .with_reg_b(ib),
+            ],
+        );
 
         Ok(())
+    }
+
+    fn extend_output<I>(&mut self, index: usize, instruction_iter: I)
+    where
+        I: IntoIterator<Item = Instruction>,
+    {
+        let instructions: Vec<_> = instruction_iter.into_iter().collect();
+        self.extra_instruction_mappings
+            .extend(iter::repeat(index).take(instructions.len()));
+        self.output.extend(instructions);
     }
 
     fn special_var(&self, index: usize) -> anyhow::Result<&VarAllocation> {

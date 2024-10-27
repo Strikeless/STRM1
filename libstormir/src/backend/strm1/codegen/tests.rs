@@ -1,5 +1,6 @@
 use std::{fs, path::PathBuf};
 
+use indexmap::IndexMap;
 use itertools::{ExactlyOneError, Itertools};
 use lazy_static::lazy_static;
 use libemulator::{tracing::pc::PCTraceData, Emulator};
@@ -7,8 +8,15 @@ use libisa::{
     instruction::{kind::InstructionKind, Instruction},
     Word,
 };
+use serde::Deserialize;
 
-use crate::{backend::strm1, lir::LIRInstruction, transformer::runner::TransformerRunner};
+use crate::{
+    backend::strm1,
+    lir::LIRInstruction,
+    transformer::{extra::Extra, runner::TransformerRunner},
+};
+
+use super::var::{VarAllocation, VarAllocationKind, VarKey};
 
 lazy_static! {
     static ref LIR_HALT: LIRInstruction = LIRInstruction::NativeMachinecode {
@@ -35,14 +43,12 @@ fn addition_emulated() {
     ])
     .unwrap();
 
-    // With tracing info from the backend these emulator tests could be made way more rigid.
-    let result = test.single_reg(|(_, value)| *value == expected);
+    let actual = test.var_value(0);
 
-    // The error type doesn't implement Debug so we can't use expect, seems to implement Display though...
-    if let Err(e) = result {
+    if actual != Some(expected) {
         test.dump_panic(
             "addition",
-            format!("Not exactly one expected value in register: {}", e),
+            format!("Expected: {:?}, got: {:?}", Some(expected), actual),
         );
     }
 }
@@ -53,8 +59,8 @@ fn two_additions_emulated() {
     let b = 2;
     let c = 3;
 
-    let expected_first = a + b;
-    let expected_second = expected_first + c;
+    let first_expected = a + b;
+    let second_expected = first_expected + c;
 
     let test = EmulatorTest::new(vec![
         // First addition: var 0 = a + b
@@ -72,20 +78,28 @@ fn two_additions_emulated() {
     ])
     .unwrap();
 
-    let first_result = test.single_reg(|(_, value)| *value == expected_first);
-    let second_result = test.single_reg(|(_, value)| *value == expected_second);
+    let first_actual = test.var_value(0);
+    let second_actual = test.var_value(1);
 
-    if let Err(e) = first_result {
+    if first_actual != Some(first_expected) {
         test.dump_panic(
             "two_additions",
-            format!("Not exactly one expected first value in register: {}", e),
+            format!(
+                "First expected: {:?}, got: {:?}",
+                Some(first_expected),
+                first_actual
+            ),
         );
     }
 
-    if let Err(e) = second_result {
+    if second_actual != Some(second_expected) {
         test.dump_panic(
             "two_additions",
-            format!("Not exactly one expected second value in register: {}", e),
+            format!(
+                "Second expected: {:?}, got: {:?}",
+                Some(second_expected),
+                second_actual
+            ),
         );
     }
 }
@@ -112,13 +126,12 @@ fn chained_additions_emulated() {
     ])
     .unwrap();
 
-    let result = test.single_reg(|(_, value)| *value == expected);
+    let actual = test.var_value(0);
 
-    // The error type doesn't implement Debug so we can't use expect, seems to implement Display though...
-    if let Err(e) = result {
+    if actual != Some(expected) {
         test.dump_panic(
             "chained_additions",
-            format!("Not exactly one expected value in register: {}", e),
+            format!("Expected: {:?}, got: {:?}", Some(expected), actual),
         );
     }
 }
@@ -127,7 +140,7 @@ fn chained_additions_emulated() {
 // It would be a shame if the other tests failed or succeeded randomly. Determinism isn't exactly something we need
 // in this codegen, but so far I've only seen non-determinism be caused by actual problems that should be found.
 // This test mostly focuses on variable allocations, most instructions aren't even used.
-fn determinism() {
+fn binary_determinism() {
     // Complete nonsense LIR that still compiles.
     let program_lir = vec![
         LIRInstruction::DefineVar { id: 0 },
@@ -147,27 +160,30 @@ fn determinism() {
         LIRInstruction::StoreOVar { id: 2 },
     ];
 
-    let mut previous_compilation = TransformerRunner::new(&mut strm1::transformer())
+    let mut previous_binary = TransformerRunner::new(&mut strm1::transformer())
         .run(program_lir.clone())
-        .expect("Compilation failed on first run");
+        .expect("Compilation failed on first run")
+        .data;
 
     for i in 2..=50 {
-        let new_compilation = TransformerRunner::new(&mut strm1::transformer())
+        let new_binary = TransformerRunner::new(&mut strm1::transformer())
             .run(program_lir.clone())
-            .expect(&format!("Compilation failed on run {}", i));
+            .expect(&format!("Compilation failed on run {}", i))
+            .data;
 
         assert_eq!(
-            previous_compilation, new_compilation,
+            previous_binary, new_binary,
             "Compilations differed on run {}",
             i
         );
 
-        previous_compilation = new_compilation;
+        previous_binary = new_binary;
     }
 }
 
 struct EmulatorTest {
-    program: Vec<u8>,
+    program: Extra<Vec<u8>>,
+    var_allocs: IndexMap<VarKey, VarAllocation>,
     emulator: Emulator<PCTraceData>,
 }
 
@@ -177,40 +193,53 @@ impl EmulatorTest {
             .run(program)
             .expect("Error compiling");
 
-        let mut emulator = Emulator::new(Word::MAX, program.clone()).unwrap();
+        let var_allocs = {
+            let rmp = program
+                .extra
+                .get(strm1::codegen::EXTRA_VAR_ALLOCATIONS_KEY_RMP)
+                .expect("No var alloc rmp extra in transformer output");
+
+            rmp_serde::from_slice(&rmp).expect("Couldn't deserialize var alloc rmp extra")
+        };
+
+        let mut emulator = Emulator::new(Word::MAX, program.data.clone()).unwrap();
         emulator.execute_to_halt().expect("Error executing");
 
-        Ok(Self { program, emulator })
+        Ok(Self {
+            program,
+            var_allocs,
+            emulator,
+        })
     }
 
-    // Holy shit
-    pub fn single_reg<'a, P>(
-        &'a self,
-        predicate: P,
-    ) -> Result<(usize, Word), ExactlyOneError<impl Iterator<Item = (usize, Word)> + 'a>>
-    where
-        P: FnMut(&(usize, Word)) -> bool + 'a,
-    {
-        self.emulator
-            .reg_file
-            .iter_untraced()
-            .enumerate()
-            .map(|(key, value_ref)| (key, *value_ref))
-            .filter(predicate)
-            .exactly_one()
+    pub fn var_value(&self, var_id: usize) -> Option<Word> {
+        let alloc = self.var_allocs.get(&VarKey::Normal(var_id))?;
+
+        match alloc.kind {
+            VarAllocationKind::Register(reg_index) => {
+                Some(self.emulator.reg_file.register(reg_index))
+            }
+            VarAllocationKind::Memory(mem_addr) => self.emulator.memory.word(mem_addr),
+        }
     }
 
     pub fn dump_panic(&self, name: &'static str, panic_msg: String) {
-        let dir_path = PathBuf::from("target").join("emulatortest");
-        let file_path = dir_path.join(PathBuf::from(name).with_extension("bin"));
+        let dir_path = PathBuf::from("target").join("emulatortest").join(name);
 
         println!(
-            "Dumping generated program binary to '{}'",
-            file_path.to_string_lossy().to_string()
+            "Dumping compilation output to '{}'",
+            dir_path.to_string_lossy().to_string()
         );
 
         fs::create_dir_all(&dir_path).unwrap();
-        fs::write(file_path, &self.program).unwrap();
+
+        let binary_path = dir_path.join("program.bin");
+        fs::write(binary_path, &self.program.data).unwrap();
+
+        for (key, value) in &self.program.extra {
+            let path = dir_path.join(format!("extra-{}", key));
+            fs::write(path, value).unwrap();
+        }
 
         panic!("{}", panic_msg)
     }

@@ -1,4 +1,4 @@
-use super::{runner::TransformerRunner, Transformer};
+use super::{extra::Extra, runner::TransformerRunner, Transformer};
 
 pub struct ChainTransformer<A, B> {
     a: A,
@@ -13,10 +13,9 @@ where
     type Input = A::Input;
     type Output = B::Output;
 
-    fn transform(&mut self, input: Self::Input) -> anyhow::Result<Self::Output> {
-        let a_output = TransformerRunner::new(&mut self.a).run(input)?;
-
-        TransformerRunner::new(&mut self.b).run(a_output)
+    fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>> {
+        let a_output = TransformerRunner::new(&mut self.a).run_with_extras(input)?;
+        TransformerRunner::new(&mut self.b).run_with_extras(a_output)
     }
 }
 

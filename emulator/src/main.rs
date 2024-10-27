@@ -1,11 +1,11 @@
 use std::{fs, path::PathBuf, process::exit};
 
 use anyhow::anyhow;
-use clap::{builder::Str, Parser};
+use clap::Parser;
 use command::{Command, CommandError};
 use libdeassembler::Deassembler;
 use libemulator::{tracing::none::NoTraceData, Emulator};
-use libisa::{instruction::Instruction, Word};
+use libisa::Word;
 use log::{error, info, LevelFilter};
 
 mod command;

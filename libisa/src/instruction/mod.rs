@@ -1,4 +1,4 @@
-use std::fmt::{Display, Write};
+use std::fmt::Display;
 
 use kind::InstructionKind;
 use thiserror::Error;
