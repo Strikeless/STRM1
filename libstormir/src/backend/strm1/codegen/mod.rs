@@ -220,13 +220,19 @@ impl Transformer for STRM1CodegenTransformer {
                 }
 
                 LIRInstruction::Cpy => {
-                    self.transform_accumulator_instruction(
+                    // Not using transform_accumulator_instruction since we don't need IB
+                    let o_var = self.special_var(index).unwrap().kind;
+                    let o_reg = o_var.as_register().unwrap();
+                    o_register = Some(o_reg);
+
+                    let ia_reg = ia_register.context("Input accumulator A not set")?;
+
+                    self.extend_output(
                         index,
-                        InstructionKind::Cpy,
-                        &mut o_register,
-                        &ia_register,
-                        &ib_register,
-                    )?;
+                        [Instruction::new(InstructionKind::Cpy)
+                            .with_reg_a(o_reg)
+                            .with_reg_b(ia_reg)],
+                    );
                 }
 
                 LIRInstruction::Add => {
@@ -401,8 +407,8 @@ impl STRM1CodegenTransformer {
         let o_reg = o_var.as_register().unwrap();
         *o = Some(o_reg);
 
-        let ia = ia.context("Input accumulator A not set")?;
-        let ib = ib.context("Input accumulator B not set")?;
+        let ia_reg = ia.context("Input accumulator A not set")?;
+        let ib_reg = ib.context("Input accumulator B not set")?;
 
         self.extend_output(
             index,
@@ -410,10 +416,10 @@ impl STRM1CodegenTransformer {
                 // Copy IA to O to not mutate IA
                 Instruction::new(InstructionKind::Cpy)
                     .with_reg_a(o_reg)
-                    .with_reg_b(ia),
+                    .with_reg_b(ia_reg),
                 Instruction::new(instruction_kind)
                     .with_reg_a(o_reg)
-                    .with_reg_b(ib),
+                    .with_reg_b(ib_reg),
             ],
         );
 
