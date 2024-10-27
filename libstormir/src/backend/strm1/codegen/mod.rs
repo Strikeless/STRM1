@@ -59,7 +59,7 @@ impl Transformer for STRM1CodegenTransformer {
             definition_key: &mut Option<VarKey>,
         ) -> anyhow::Result<()> {
             // Previous input accumulator allocation can be dropped as we overwrite it here.
-            dealloc_accumulator(var_table_builder, definition_key)?;
+            dealloc_accumulator(var_table_builder, definition_key, 0)?;
 
             let key = VarKey::Special(index);
             var_table_builder.define(key, true)?;
@@ -71,9 +71,10 @@ impl Transformer for STRM1CodegenTransformer {
         fn dealloc_accumulator(
             var_table_builder: &mut VarTableBuilder,
             definition_key: &mut Option<VarKey>,
+            offset: usize,
         ) -> anyhow::Result<()> {
             if let Some(definition_key) = definition_key.take() {
-                var_table_builder.drop(definition_key, 0)?;
+                var_table_builder.drop(definition_key, offset)?;
             }
 
             Ok(())
@@ -110,11 +111,12 @@ impl Transformer for STRM1CodegenTransformer {
                 }
 
                 LIRInstruction::StoreOVar { .. } => {
-                    // The LIR documentation allows dropping all accumulators (just specified it there hehe) upon
-                    // an output accumulator store, so do that here for simplicity.
-                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key)?;
-                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key)?;
-                    dealloc_accumulator(&mut var_table_builder, &mut o_definition_key)?;
+                    // The LIR documentation allows dropping all accumulators upon an output accumulator store,
+                    // so do that here for simplicity.
+                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key, 0)?;
+                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 0)?;
+                    // Drop the output accumulator with an offset of one instruction to make sure issues don't arise here.
+                    dealloc_accumulator(&mut var_table_builder, &mut o_definition_key, 1)?;
 
                     // Store needs a scratchpad register to store the address of an in-memory target variable.
                     let key = VarKey::Special(index);
@@ -127,6 +129,17 @@ impl Transformer for STRM1CodegenTransformer {
 
                 LIRInstruction::Cpy | LIRInstruction::Add | LIRInstruction::Sub => {
                     alloc_accumulator(index, &mut var_table_builder, &mut o_definition_key)?;
+
+                    // Input accumulators may now be dropped by the next instruction as per the LIR documentation.
+                    // This also means that "chaining" these operations by only changing IB isn't a thing to worry about.
+                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key, 1)?;
+                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 1)?;
+                }
+
+                LIRInstruction::Goto | LIRInstruction::GotoIfZero => {
+                    // Read comment above in the LIRInstruction::Cpy clause.
+                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key, 1)?;
+                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 1)?;
                 }
 
                 _ => {}

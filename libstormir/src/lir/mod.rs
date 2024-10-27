@@ -32,18 +32,23 @@ pub enum LIRInstruction {
     StoreOVar { id: LIRVarId },
 
     /// Copy value of input accumulator A to output accumulator.
+    /// NOTE: This instruction is allowed to forget loaded input accumulators.
     Cpy,
 
     /// Add values of input accumulators and store the result in the output accumulator.
+    /// NOTE: This instruction is allowed to forget loaded input accumulators.
     Add,
 
     /// Subtract values of input accumulators and store the result in the output accumulator.
+    /// NOTE: This instruction is allowed to forget loaded input accumulators.
     Sub,
 
     /// Unconditionally move code execution to address in input accumulator A.
+    /// NOTE: This instruction is allowed to forget loaded input accumulators.
     Goto,
 
     /// If value in input accumulator A is zero, Move code execution to address in input accumulator B.
+    /// NOTE: This instruction is allowed to forget loaded input accumulators.
     GotoIfZero,
 
     /// Native machine code pass-through. May or may not be validated.

@@ -1,14 +1,12 @@
 use std::{fs, path::PathBuf};
 
 use indexmap::IndexMap;
-use itertools::{ExactlyOneError, Itertools};
 use lazy_static::lazy_static;
 use libemulator::{tracing::pc::PCTraceData, Emulator};
 use libisa::{
     instruction::{kind::InstructionKind, Instruction},
     Word,
 };
-use serde::Deserialize;
 
 use crate::{
     backend::strm1,
@@ -72,6 +70,7 @@ fn two_additions_emulated() {
         // Second addition: var 1 = var 0 + c
         LIRInstruction::LoadIAVar { id: 0 },
         LIRInstruction::LoadIBConst { value: c },
+        LIRInstruction::Add,
         LIRInstruction::DefineVar { id: 1 },
         LIRInstruction::StoreOVar { id: 1 },
         LIR_HALT.clone(),
@@ -100,38 +99,6 @@ fn two_additions_emulated() {
                 Some(second_expected),
                 second_actual
             ),
-        );
-    }
-}
-
-#[test]
-fn chained_additions_emulated() {
-    let a = 1;
-    let b = 2;
-    let c = 3;
-
-    let expected = a + b + c;
-
-    let test = EmulatorTest::new(vec![
-        // First addition: a + b
-        LIRInstruction::LoadIAConst { value: a },
-        LIRInstruction::LoadIBConst { value: b },
-        LIRInstruction::Add,
-        // Second addition: previous + c
-        LIRInstruction::LoadIBConst { value: c },
-        // Store to var 0
-        LIRInstruction::DefineVar { id: 0 },
-        LIRInstruction::StoreOVar { id: 0 },
-        LIR_HALT.clone(),
-    ])
-    .unwrap();
-
-    let actual = test.var_value(0);
-
-    if actual != Some(expected) {
-        test.dump_panic(
-            "chained_additions",
-            format!("Expected: {:?}, got: {:?}", Some(expected), actual),
         );
     }
 }
