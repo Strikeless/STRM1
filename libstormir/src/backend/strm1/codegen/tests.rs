@@ -1,13 +1,9 @@
-use std::{
-    fmt::{Debug, Display},
-    fs,
-    path::PathBuf,
-};
+use std::{fmt::Debug, fs, path::PathBuf};
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
-use libemulator::{tracing::pc::PCTraceData, Emulator};
+use libemulator::{execute::ExecuteOk, tracing::pc::PCTraceData, Emulator};
 use libisa::{
     instruction::{kind::InstructionKind, Instruction},
     Word,
@@ -47,12 +43,17 @@ fn addition_emulated() {
         ],
     );
 
-    let emulated = test.emulate();
-    let actual = emulated.var(var_id);
+    test.dump_panic_on_err(|| {
+        let emulated = test.emulate()?.executed_to_halt()?;
 
-    if actual != Some(expected) {
-        test.dump_panic(format!("Expected: {:?}, got: {:?}", Some(expected), actual));
-    }
+        let actual = emulated.var(var_id);
+
+        if actual != Some(expected) {
+            Err(anyhow!("Expected: {:?}, got: {:?}", Some(expected), actual))
+        } else {
+            Ok(())
+        }
+    });
 }
 
 #[test]
@@ -86,25 +87,30 @@ fn two_additions_emulated() {
         ],
     );
 
-    let emulation = test.emulate();
-    let first_actual = emulation.var(first_var_id);
-    let second_actual = emulation.var(second_var_id);
+    test.dump_panic_on_err(|| {
+        let emulation = test.emulate()?.executed_to_halt()?;
 
-    if first_actual != Some(first_expected) {
-        test.dump_panic(format!(
-            "First expected: {:?}, got: {:?}",
-            Some(first_expected),
-            first_actual
-        ));
-    }
+        let first_actual = emulation.var(first_var_id);
+        let second_actual = emulation.var(second_var_id);
 
-    if second_actual != Some(second_expected) {
-        test.dump_panic(format!(
-            "Second expected: {:?}, got: {:?}",
-            Some(second_expected),
-            second_actual
-        ));
-    }
+        if first_actual != Some(first_expected) {
+            test.dump_panic(format!(
+                "First expected: {:?}, got: {:?}",
+                Some(first_expected),
+                first_actual
+            ));
+        }
+
+        if second_actual != Some(second_expected) {
+            test.dump_panic(format!(
+                "Second expected: {:?}, got: {:?}",
+                Some(second_expected),
+                second_actual
+            ));
+        }
+
+        Ok(())
+    })
 }
 
 #[test]
@@ -161,13 +167,18 @@ fn many_chained_additions_emulated() {
     program_lir.push(LIR_HALT.clone());
 
     let test = Test::new("many_chained_additions_emulated", program_lir);
-    let emulation = test.emulate();
 
-    let actual = emulation.var(output_var_id);
+    test.dump_panic_on_err(|| {
+        let emulation = test.emulate()?.executed_to_halt()?;
 
-    if actual != Some(expected) {
-        test.dump_panic(format!("Expected: {:?}, got: {:?}", Some(expected), actual));
-    }
+        let actual = emulation.var(output_var_id);
+
+        if actual != Some(expected) {
+            Err(anyhow!("Expected: {:?}, got: {:?}", Some(expected), actual))
+        } else {
+            Ok(())
+        }
+    });
 }
 
 #[test]
@@ -215,6 +226,30 @@ fn binary_determinism() {
     }
 }
 
+#[test]
+fn emulated_infinite_loop_does_not_halt() {
+    use anyhow::anyhow;
+
+    let test = Test::new(
+        "infinite_loop",
+        [
+            LIRInstruction::LoadIALabel,
+            LIRInstruction::Cpy,
+            LIRInstruction::Goto,
+            LIR_HALT.clone(),
+        ],
+    );
+
+    test.dump_panic_on_err(|| {
+        let emulation = test.emulate()?.executed(1000)?; // Arbitrary instruction count to be executed
+
+        match emulation.halted {
+            true => Err(anyhow!("Infinite loop halted")),
+            false => Ok(()),
+        }
+    });
+}
+
 struct Test {
     name: &'static str,
     program: Extra<Vec<u8>>,
@@ -241,18 +276,15 @@ impl Test {
         }
     }
 
-    pub fn emulate(&self) -> Emulation {
-        match Emulation::emulate_test(self) {
-            Ok(emulation) => emulation,
-            Err(e) => self.dump_panic(e.context("Executing program")),
-        }
+    pub fn emulate(&self) -> anyhow::Result<Emulation> {
+        Emulation::new(self)
     }
 
     pub fn dump_panic_on_err<F, O>(&self, func: F) -> O
     where
-        F: FnOnce(&Self) -> anyhow::Result<O>,
+        F: FnOnce() -> anyhow::Result<O>,
     {
-        match func(self) {
+        match func() {
             Ok(output) => output,
             Err(e) => self.dump_panic(e),
         }
@@ -300,17 +332,49 @@ impl Test {
 struct Emulation<'a> {
     test: &'a Test,
     emulator: Emulator<PCTraceData>,
+    pub halted: bool,
 }
 
 impl<'a> Emulation<'a> {
-    fn emulate_test(test: &'a Test) -> anyhow::Result<Self> {
-        let mut emulator = Emulator::new(Word::MAX, test.program.data.clone())?;
+    fn new(test: &'a Test) -> anyhow::Result<Self> {
+        let emulator = Emulator::new(Word::MAX, test.program.data.clone())?;
+        Ok(Self {
+            test,
+            emulator,
+            halted: false,
+        })
+    }
 
-        emulator
+    pub fn executed_to_halt(mut self) -> anyhow::Result<Self> {
+        self.execute_to_halt().map(|_| self)
+    }
+
+    pub fn execute_to_halt(&mut self) -> anyhow::Result<()> {
+        self.emulator
             .execute_to_halt()
             .context("Executing emulation to halt")?;
 
-        Ok(Self { test, emulator })
+        self.halted = true;
+        Ok(())
+    }
+
+    pub fn executed(mut self, instruction_count: usize) -> anyhow::Result<Self> {
+        self.execute(instruction_count).map(|_| self)
+    }
+
+    pub fn execute(&mut self, instruction_count: usize) -> anyhow::Result<()> {
+        for i in 0..instruction_count {
+            let state = self
+                .emulator
+                .execute_instruction()
+                .with_context(|| format!("Executing emulation on instruction {}", i))?;
+
+            if state == ExecuteOk::Halted {
+                self.halted = true;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn var(&self, id: usize) -> Option<Word> {

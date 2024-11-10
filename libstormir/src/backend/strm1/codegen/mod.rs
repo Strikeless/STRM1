@@ -137,10 +137,11 @@ impl Transformer for STRM1CodegenTransformer {
                     dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 1)?;
                 }
 
-                LIRInstruction::Goto | LIRInstruction::GotoIfZero => {
-                    // Read comment above in the LIRInstruction::Cpy clause.
-                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key, 1)?;
-                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 1)?;
+                LIRInstruction::Goto => {
+                    // Input accumulators aren't used by Goto, so no need for offset.
+                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key, 0)?;
+                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 0)?;
+                    dealloc_accumulator(&mut var_table_builder, &mut o_definition_key, 1)?;
                 }
 
                 _ => {}
@@ -254,6 +255,15 @@ impl Transformer for STRM1CodegenTransformer {
                         &ia_register,
                         &ib_register,
                     )?;
+                }
+
+                LIRInstruction::Goto => {
+                    let o_register = o_register.context("Goto without set O accumulator")?;
+
+                    self.extend_output(
+                        index,
+                        [Instruction::new(InstructionKind::Jmp).with_reg_a(o_register)],
+                    );
                 }
 
                 LIRInstruction::NativeMachinecode { code } => {
