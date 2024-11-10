@@ -27,9 +27,11 @@ impl Default for VarTable {
             allocations: IndexMap::default(),
             reg_usage: RangedUsageMap::new(libisa::REGISTER_COUNT).preallocated(),
 
-            // FIXME: The usable memory region for variables should probably start from the end of the program code.
-            //        This is not the way to go for sure, larger programs will break.
-            mem_usage: RangedUsageMap::new_with_usable_region(1024..libisa::Word::MAX as usize),
+            // BUG: Larger programs will break due to in-memory variables overlapping with program data.
+            //      I'm postponing fixing this for now, as I believe the best way to fix involves
+            //      adding a new pass to codegen where variable addresses are computed, this should
+            //      have the benefit of making absolute/magic addresses in LIR easy to implement.
+            mem_usage: RangedUsageMap::new_with_usable_region(4096..libisa::Word::MAX as usize),
         }
     }
 }

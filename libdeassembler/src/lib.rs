@@ -19,21 +19,28 @@ where
         }
     }
 
-    pub fn deassemble_ignorant(mut self) -> String {
-        let mut output = String::new();
+    pub fn deassemble(mut self) -> Result<Vec<Instruction>, String> {
+        let mut output = Vec::new();
 
         while self.code_iter.peek().is_some() {
-            if !output.is_empty() {
-                output.push_str("\n");
-            }
-
-            output.push_str(&self.deassemble_instruction_ignorant());
+            output.push(self.deassemble_instruction()?);
         }
 
-        output
+        Ok(output)
     }
 
-    pub fn deassemble_instruction(&mut self) -> Result<String, String> {
+    pub fn deassemble_text(self) -> String {
+        match self.deassemble() {
+            Ok(deassembly) => deassembly
+                .iter()
+                .map(|instr| format!("{}", instr))
+                .collect(),
+
+            Err(e) => e,
+        }
+    }
+
+    pub fn deassemble_instruction(&mut self) -> Result<Instruction, String> {
         if self.code_iter.peek().is_none() {
             return Err("<out of deassembler bounds>".to_string());
         }
@@ -51,12 +58,13 @@ where
             instruction.immediate = Some(immediate);
         }
 
-        Ok(format!("{}", instruction))
+        Ok(instruction)
     }
 
-    pub fn deassemble_instruction_ignorant(&mut self) -> String {
+    pub fn deassemble_instruction_text(&mut self) -> String {
         match self.deassemble_instruction() {
-            Ok(s) | Err(s) => s,
+            Ok(instr) => format!("{}", instr),
+            Err(e) => e,
         }
     }
 

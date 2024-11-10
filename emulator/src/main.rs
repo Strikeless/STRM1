@@ -149,6 +149,6 @@ impl Cli {
                 .skip(self.emulator.pc as usize),
         );
 
-        deassembler.deassemble_instruction_ignorant()
+        deassembler.deassemble_instruction_text()
     }
 }

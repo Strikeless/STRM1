@@ -2,6 +2,7 @@ use std::iter;
 
 use anyhow::{anyhow, Context};
 use indexmap::IndexMap;
+use libdeassembler::Deassembler;
 use libisa::{
     instruction::{kind::InstructionKind, Instruction},
     Register, Word,
@@ -256,28 +257,13 @@ impl Transformer for STRM1CodegenTransformer {
                 }
 
                 LIRInstruction::NativeMachinecode { code } => {
-                    let mut code_iter = code.iter().peekable();
+                    let code_iter = code.iter();
 
-                    while code_iter.peek().is_some() {
-                        let mut next = || {
-                            code_iter
-                                .next()
-                                .map(|byte_ref| *byte_ref)
-                                .ok_or_else(|| anyhow!("Incomplete instruction"))
-                        };
+                    let deassembly = Deassembler::new(code_iter)
+                        .deassemble()
+                        .map_err(|e| anyhow!("Invalid native machinecode passthrough: {}", e))?;
 
-                        let instruction_word = libisa::bytes_to_word([next()?, next()?]);
-                        let mut instruction_deassembled =
-                            Instruction::deassemble_instruction_word(instruction_word)
-                                .map_err(|e| anyhow!("Invalid instruction: {}", e))?;
-
-                        if instruction_deassembled.kind.has_immediate() {
-                            let immediate_word = libisa::bytes_to_word([next()?, next()?]);
-                            instruction_deassembled.immediate = Some(immediate_word);
-                        }
-
-                        self.extend_output(index, [instruction_deassembled]);
-                    }
+                    self.extend_output(index, deassembly);
                 }
 
                 x => {

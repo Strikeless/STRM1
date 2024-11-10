@@ -19,6 +19,6 @@ fn main() {
     };
 
     let deassembler = Deassembler::new(program.iter());
-    println!("{}", deassembler.deassemble_ignorant());
+    println!("{}", deassembler.deassemble_text());
     println!();
 }
