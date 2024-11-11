@@ -22,10 +22,26 @@ where
     }
 
     pub fn run_with_extras(&mut self, input: Extra<T::Input>) -> anyhow::Result<Extra<T::Output>> {
-        self.transformer.prepass(&input).context("During prepass")?;
+        for (prepass_name, prepass_fn) in T::PREPASSES {
+            prepass_fn(&mut self.transformer, &input)
+                .with_context(|| format!("During prepass '{}'", prepass_name))?;
+        }
 
         self.transformer
             .transform(input)
             .context("During transformation")
+    }
+}
+
+pub trait TransformerRunnerExt: Transformer + Sized {
+    fn runner(&mut self) -> TransformerRunner<Self>;
+}
+
+impl<T> TransformerRunnerExt for T
+where
+    T: Transformer,
+{
+    fn runner(&mut self) -> TransformerRunner<Self> {
+        TransformerRunner::new(self)
     }
 }

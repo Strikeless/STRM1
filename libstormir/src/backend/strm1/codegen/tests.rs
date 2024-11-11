@@ -12,7 +12,7 @@ use libisa::{
 use crate::{
     backend::strm1,
     lir::LIRInstruction,
-    transformer::{extra::Extra, runner::TransformerRunner},
+    transformer::{extra::Extra, runner::TransformerRunnerExt},
 };
 
 use super::var::{VarAllocation, VarAllocationKind, VarKey};
@@ -205,13 +205,15 @@ fn binary_determinism() {
         LIRInstruction::StoreOVar { id: 2 },
     ];
 
-    let mut previous_binary = TransformerRunner::new(&mut strm1::transformer())
+    let mut previous_binary = strm1::transformer()
+        .runner()
         .run(program_lir.clone())
         .expect("Compilation failed on first run")
         .data;
 
     for i in 2..=50 {
-        let new_binary = TransformerRunner::new(&mut strm1::transformer())
+        let new_binary = strm1::transformer()
+            .runner()
             .run(program_lir.clone())
             .expect(&format!("Compilation failed on run {}", i))
             .data;
@@ -263,7 +265,8 @@ impl Test {
     {
         let lir: Vec<_> = lir.into_iter().collect();
 
-        let program = TransformerRunner::new(&mut strm1::transformer())
+        let program = strm1::transformer()
+            .runner()
             .run(lir)
             .expect("Error compiling LIR");
 

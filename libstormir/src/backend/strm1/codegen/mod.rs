@@ -11,7 +11,7 @@ use var::{builder::VarTableBuilder, VarAllocation, VarAllocationKind, VarKey, Va
 
 use crate::{
     lir::{LIRInstruction, LIRVarId},
-    transformer::{extra::Extra, Transformer},
+    transformer::{extra::Extra, PrepassFn, Transformer},
 };
 
 mod var;
@@ -47,110 +47,7 @@ impl Transformer for STRM1CodegenTransformer {
     type Input = Vec<LIRInstruction>;
     type Output = Vec<Instruction>;
 
-    fn prepass(&mut self, input: &Extra<Self::Input>) -> anyhow::Result<()> {
-        let mut var_table_builder = VarTableBuilder::new();
-
-        let mut ia_definition_key = None;
-        let mut ib_definition_key = None;
-        let mut o_definition_key = None;
-
-        fn alloc_accumulator(
-            index: usize,
-            var_table_builder: &mut VarTableBuilder,
-            definition_key: &mut Option<VarKey>,
-        ) -> anyhow::Result<()> {
-            // Previous input accumulator allocation can be dropped as we overwrite it here.
-            dealloc_accumulator(var_table_builder, definition_key, 0)?;
-
-            let key = VarKey::Special(index);
-            var_table_builder.define(key, true)?;
-            *definition_key = Some(key);
-
-            Ok(())
-        }
-
-        fn dealloc_accumulator(
-            var_table_builder: &mut VarTableBuilder,
-            definition_key: &mut Option<VarKey>,
-            offset: usize,
-        ) -> anyhow::Result<()> {
-            if let Some(definition_key) = definition_key.take() {
-                var_table_builder.drop(definition_key, offset)?;
-            }
-
-            Ok(())
-        }
-
-        for (index, lir_instruction) in input.data.iter().enumerate() {
-            var_table_builder.set_current_index(index);
-
-            match lir_instruction {
-                LIRInstruction::DefineVar { id } => {
-                    var_table_builder.define(VarKey::Normal(*id), false)?;
-                }
-                LIRInstruction::DropVar { id } => {
-                    var_table_builder.drop(VarKey::Normal(*id), 0)?;
-                }
-
-                //
-                // Loads to input accumulators need a special register allocation to hold the value in
-                //
-                LIRInstruction::LoadIAConst { .. } | LIRInstruction::LoadIALabel => {
-                    alloc_accumulator(index, &mut var_table_builder, &mut ia_definition_key)?;
-                }
-                LIRInstruction::LoadIBConst { .. } | LIRInstruction::LoadIBLabel => {
-                    alloc_accumulator(index, &mut var_table_builder, &mut ib_definition_key)?;
-                }
-
-                LIRInstruction::LoadIAVar { id } => {
-                    alloc_accumulator(index, &mut var_table_builder, &mut ia_definition_key)?;
-                    var_table_builder.heaten(VarKey::Normal(*id))?
-                }
-                LIRInstruction::LoadIBVar { id } => {
-                    alloc_accumulator(index, &mut var_table_builder, &mut ib_definition_key)?;
-                    var_table_builder.heaten(VarKey::Normal(*id))?
-                }
-
-                LIRInstruction::StoreOVar { .. } => {
-                    // The LIR documentation allows dropping all accumulators upon an output accumulator store,
-                    // so do that here for simplicity.
-                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key, 0)?;
-                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 0)?;
-                    // Drop the output accumulator with an offset of one instruction to make sure issues don't arise here.
-                    dealloc_accumulator(&mut var_table_builder, &mut o_definition_key, 1)?;
-
-                    // Store needs a scratchpad register to store the address of an in-memory target variable.
-                    let key = VarKey::Special(index);
-
-                    var_table_builder.define(key, true).unwrap();
-
-                    // The register is only needed during execution of this instruction, so drop it by the next instruction.
-                    var_table_builder.drop(key, 1).unwrap();
-                }
-
-                LIRInstruction::Cpy | LIRInstruction::Add | LIRInstruction::Sub => {
-                    alloc_accumulator(index, &mut var_table_builder, &mut o_definition_key)?;
-
-                    // Input accumulators may now be dropped by the next instruction as per the LIR documentation.
-                    // This also means that "chaining" these operations by only changing IB isn't a thing to worry about.
-                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key, 1)?;
-                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 1)?;
-                }
-
-                LIRInstruction::Goto => {
-                    // Input accumulators aren't used by Goto, so no need for offset.
-                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key, 0)?;
-                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 0)?;
-                    dealloc_accumulator(&mut var_table_builder, &mut o_definition_key, 1)?;
-                }
-
-                _ => {}
-            }
-        }
-
-        self.var_table = var_table_builder.build()?;
-        Ok(())
-    }
+    const PREPASSES: &[(&'static str, PrepassFn<Self>)] = &[("prepass", Self::prepass)];
 
     fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>> {
         let mut ia_register = None;
@@ -275,10 +172,6 @@ impl Transformer for STRM1CodegenTransformer {
 
                     self.extend_output(index, deassembly);
                 }
-
-                x => {
-                    todo!("{:?}", x)
-                }
             }
         }
 
@@ -322,6 +215,111 @@ impl Transformer for STRM1CodegenTransformer {
 }
 
 impl STRM1CodegenTransformer {
+    fn prepass(&mut self, input: &Extra<<Self as Transformer>::Input>) -> anyhow::Result<()> {
+        let mut var_table_builder = VarTableBuilder::new();
+
+        let mut ia_definition_key = None;
+        let mut ib_definition_key = None;
+        let mut o_definition_key = None;
+
+        fn alloc_accumulator(
+            index: usize,
+            var_table_builder: &mut VarTableBuilder,
+            definition_key: &mut Option<VarKey>,
+        ) -> anyhow::Result<()> {
+            // Previous input accumulator allocation can be dropped as we overwrite it here.
+            dealloc_accumulator(var_table_builder, definition_key, 0)?;
+
+            let key = VarKey::Special(index);
+            var_table_builder.define(key, true)?;
+            *definition_key = Some(key);
+
+            Ok(())
+        }
+
+        fn dealloc_accumulator(
+            var_table_builder: &mut VarTableBuilder,
+            definition_key: &mut Option<VarKey>,
+            offset: usize,
+        ) -> anyhow::Result<()> {
+            if let Some(definition_key) = definition_key.take() {
+                var_table_builder.drop(definition_key, offset)?;
+            }
+
+            Ok(())
+        }
+
+        for (index, lir_instruction) in input.data.iter().enumerate() {
+            var_table_builder.set_current_index(index);
+
+            match lir_instruction {
+                LIRInstruction::DefineVar { id } => {
+                    var_table_builder.define(VarKey::Normal(*id), false)?;
+                }
+                LIRInstruction::DropVar { id } => {
+                    var_table_builder.drop(VarKey::Normal(*id), 0)?;
+                }
+
+                //
+                // Loads to input accumulators need a special register allocation to hold the value in
+                //
+                LIRInstruction::LoadIAConst { .. } | LIRInstruction::LoadIALabel => {
+                    alloc_accumulator(index, &mut var_table_builder, &mut ia_definition_key)?;
+                }
+                LIRInstruction::LoadIBConst { .. } | LIRInstruction::LoadIBLabel => {
+                    alloc_accumulator(index, &mut var_table_builder, &mut ib_definition_key)?;
+                }
+
+                LIRInstruction::LoadIAVar { id } => {
+                    alloc_accumulator(index, &mut var_table_builder, &mut ia_definition_key)?;
+                    var_table_builder.heaten(VarKey::Normal(*id))?
+                }
+                LIRInstruction::LoadIBVar { id } => {
+                    alloc_accumulator(index, &mut var_table_builder, &mut ib_definition_key)?;
+                    var_table_builder.heaten(VarKey::Normal(*id))?
+                }
+
+                LIRInstruction::StoreOVar { .. } => {
+                    // The LIR documentation allows dropping all accumulators upon an output accumulator store,
+                    // so do that here for simplicity.
+                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key, 0)?;
+                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 0)?;
+                    // Drop the output accumulator with an offset of one instruction to make sure issues don't arise here.
+                    dealloc_accumulator(&mut var_table_builder, &mut o_definition_key, 1)?;
+
+                    // Store needs a scratchpad register to store the address of an in-memory target variable.
+                    let key = VarKey::Special(index);
+
+                    var_table_builder.define(key, true).unwrap();
+
+                    // The register is only needed during execution of this instruction, so drop it by the next instruction.
+                    var_table_builder.drop(key, 1).unwrap();
+                }
+
+                LIRInstruction::Cpy | LIRInstruction::Add | LIRInstruction::Sub => {
+                    alloc_accumulator(index, &mut var_table_builder, &mut o_definition_key)?;
+
+                    // Input accumulators may now be dropped by the next instruction as per the LIR documentation.
+                    // This also means that "chaining" these operations by only changing IB isn't a thing to worry about.
+                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key, 1)?;
+                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 1)?;
+                }
+
+                LIRInstruction::Goto => {
+                    // Input accumulators aren't used by Goto, so no need for offset.
+                    dealloc_accumulator(&mut var_table_builder, &mut ia_definition_key, 0)?;
+                    dealloc_accumulator(&mut var_table_builder, &mut ib_definition_key, 0)?;
+                    dealloc_accumulator(&mut var_table_builder, &mut o_definition_key, 1)?;
+                }
+
+                _ => {}
+            }
+        }
+
+        self.var_table = var_table_builder.build()?;
+        Ok(())
+    }
+
     fn transform_load_const(
         &mut self,
         index: usize,

@@ -5,14 +5,14 @@ pub mod extra;
 pub mod repeat;
 pub mod runner;
 
-pub trait Transformer {
+pub type PrepassFn<S> =
+    fn(this: &mut S, input: &Extra<<S as Transformer>::Input>) -> anyhow::Result<()>;
+
+pub trait Transformer: 'static {
     type Input;
     type Output;
 
-    #[allow(unused_variables)] // It's a trait Rust why are you complaining about me not using input in this default implementation?
-    fn prepass(&mut self, input: &Extra<Self::Input>) -> anyhow::Result<()> {
-        Ok(())
-    }
+    const PREPASSES: &[(&'static str, PrepassFn<Self>)] = &[];
 
     fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>>;
 }
