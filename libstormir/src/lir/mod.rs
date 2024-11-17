@@ -1,53 +1,81 @@
+pub mod shim;
+
 pub type LIRVarId = usize;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LIRInstruction {
-    /// Define variable with the given ID.
-    DefineVar { id: LIRVarId },
+    /// Declare variable with the given ID and constant value.
+    Const {
+        id: LIRVarId,
+        value: LIRValue,
+    },
 
-    /// Mark variable as unused and to be deallocated.
-    DropVar { id: LIRVarId },
+    /// Declare variable with the given ID and value copied from the source variable.
+    Copy {
+        id: LIRVarId,
+        src: LIRVarId,
+    },
 
-    /// Load constant value to input accumulator A.
-    LoadIAConst { value: u16 },
+    Add {
+        id: LIRVarId,
+        a: LIRVarId,
+        b: LIRVarId,
+    },
+    Sub {
+        id: LIRVarId,
+        a: LIRVarId,
+        b: LIRVarId,
+    },
+    Mul {
+        id: LIRVarId,
+        a: LIRVarId,
+        b: LIRVarId,
+    },
 
-    /// Load constant value to input accumulator B.
-    LoadIBConst { value: u16 },
+    Branch {
+        addr: LIRVarId,
+    },
+    BranchZero {
+        addr: LIRVarId,
+        test: LIRVarId,
+    },
+    // TODO: How should a carry branch be implemented?
+    BranchEqual {
+        addr: LIRVarId,
+        a: LIRVarId,
+        b: LIRVarId,
+    },
 
-    /// Load value of variable to input accumulator A.
-    LoadIAVar { id: LIRVarId },
+    /// Native machine code passthrough. May or may not be validated.
+    NativeMachinecode {
+        code: Vec<u8>,
+    },
+}
 
-    /// Load value of variable to input accumulator B.
-    LoadIBVar { id: LIRVarId },
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LIRValue {
+    Uint8(u8),
+    Uint16(u16),
+}
 
-    /// Load current instruction address to input accumulator A.
-    LoadIALabel,
+// That use<'_> bound is some black magic that tells Rust that the iterator's lifetime depends on the lir reference.
+pub fn free_var_ids(lir: &Vec<LIRInstruction>) -> impl Iterator<Item = LIRVarId> + use<'_> {
+    // Horribly inefficient implementation if iterated on a lot.
+    (0..LIRVarId::MAX).filter(|id| {
+        !lir.iter()
+            .any(|instruction| instruction.introduced_var_ids().contains(&id))
+    })
+}
 
-    /// Load current instruction address to input accumulator B.
-    LoadIBLabel,
-
-    /// Store value of output accumulator to variable.
-    /// NOTE: This instruction is allowed to forget loaded accumulators. This may simplify backend codegen.
-    ///       Always load input accumulators again after a store if needed. You're on your own otherwise.
-    StoreOVar { id: LIRVarId },
-
-    /// Copy value of input accumulator A to output accumulator.
-    /// NOTE: This instruction is allowed to forget loaded input accumulators.
-    Cpy,
-
-    /// Add values of input accumulators and store the result in the output accumulator.
-    /// NOTE: This instruction is allowed to forget loaded input accumulators.
-    Add,
-
-    /// Subtract values of input accumulators and store the result in the output accumulator.
-    /// NOTE: This instruction is allowed to forget loaded input accumulators.
-    Sub,
-
-    /// Unconditionally move code execution to address in the output accumulator.
-    /// NOTE: This instruction is allowed to forget loaded accumulators.
-    Goto,
-
-    // TODO: Conditional branching
-    /// Native machine code pass-through. May or may not be validated.
-    NativeMachinecode { code: Vec<u8> },
+impl LIRInstruction {
+    pub fn introduced_var_ids(&self) -> Vec<&LIRVarId> {
+        match self {
+            Self::Const { id, .. }
+            | Self::Copy { id, .. }
+            | Self::Add { id, .. }
+            | Self::Sub { id, .. }
+            | Self::Mul { id, .. } => vec![id],
+            _ => vec![],
+        }
+    }
 }

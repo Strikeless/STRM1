@@ -1,8 +1,0 @@
-Probably great ideas for a LIR rewrite:
-- Static Single Assignment form variables to simplify codegen and optimization
-    - ditch the input and output accumulator concept along with this
-    - maybe possibly consider taking an extreme approach and also doing single accesses with a special op for copying
-        + variable allocation gets even easier
-        + optimizations get easier
-        - bit tedious
-        - output quality could suffer until there are great folding and deduplication optimizations
