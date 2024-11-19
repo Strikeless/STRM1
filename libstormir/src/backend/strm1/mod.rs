@@ -18,8 +18,7 @@ impl Transformer for STRM1Transformer {
     type Output = Vec<u8>;
 
     fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>> {
-        (CmpShimTransformer) // Remember to remove if codegen learns all the cmp tricks.
-            .chain(CodegenTransformer::new())
+        CodegenTransformer::new()
             .chain(MachinecodeTransformer)
             .runner()
             .run_with_extras(input)

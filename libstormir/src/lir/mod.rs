@@ -52,7 +52,7 @@ pub enum LIRInstruction {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LIRValue {
     Uint8(u8),
     Uint16(u16),

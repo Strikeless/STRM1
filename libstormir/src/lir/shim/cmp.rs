@@ -6,7 +6,7 @@ use crate::{
     transformer::{extra::Extra, Transformer},
 };
 
-/// Shim to replace uses of LIR instructions .
+/// Shim to replace uses of LIR instructions.
 pub struct CmpShimTransformer;
 
 impl Transformer for CmpShimTransformer {
