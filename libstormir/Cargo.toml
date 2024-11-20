@@ -19,3 +19,6 @@ libdeassembler = { path = "../libdeassembler" }
 lazy_static = "1.5"
 
 libemulator = { path = "../libemulator" } # Used for testing backend codegen
+
+[profile.test]
+opt-level = 1 # Enable a little bit of optimization for test builds

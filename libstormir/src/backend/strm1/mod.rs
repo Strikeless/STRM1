@@ -2,7 +2,7 @@ use codegen::CodegenTransformer;
 use machinecode::MachinecodeTransformer;
 
 use crate::{
-    lir::{shim::cmp::CmpShimTransformer, LIRInstruction},
+    lir::LIRInstruction,
     transformer::{
         chain::TransformerChainExt, extra::Extra, runner::TransformerRunnerExt, Transformer,
     },

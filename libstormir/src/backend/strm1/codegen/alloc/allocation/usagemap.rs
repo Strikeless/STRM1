@@ -1,18 +1,12 @@
 use std::ops::Range;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct RangedUsageMap<V>
-where
-    V: Clone + PartialEq,
-{
-    slots: Vec<UsageSlot<V>>,
+pub struct RangedUsageMap {
+    slots: Vec<UsageSlot>,
     usable_region: Range<usize>,
 }
 
-impl<V> RangedUsageMap<V>
-where
-    V: Clone + PartialEq,
-{
+impl RangedUsageMap {
     pub fn new(capacity: usize) -> Self {
         Self::new_with_usable_region(0..capacity)
     }
@@ -29,17 +23,13 @@ where
         self
     }
 
-    pub fn reserve(&mut self, slot: usize, range: Range<usize>, value: V) {
-        let slot = self.slot_mut(slot);
-        slot.reserve(range, value);
+    pub fn reserve_free(&mut self, range: Range<usize>) -> Option<usize> {
+        let free_slot = self.find_free(&range)?;
+        self.reserve(free_slot, range);
+        Some(free_slot)
     }
 
-    pub fn free(&mut self, slot: usize, range: &Range<usize>, value: &V) {
-        let slot = self.slot_mut(slot);
-        slot.free(range, value);
-    }
-
-    pub fn free_slot(&mut self, range: &Range<usize>) -> Option<usize> {
+    pub fn find_free(&mut self, range: &Range<usize>) -> Option<usize> {
         let existing_free_index = self
             .slots
             .iter()
@@ -48,6 +38,16 @@ where
         existing_free_index
             .or_else(|| self.create_new_slot())
             .map(|index| self.vec_index_to_slot(index))
+    }
+
+    pub fn reserve(&mut self, slot: usize, range: Range<usize>) {
+        let slot = self.slot_mut(slot);
+        slot.reserve(range);
+    }
+
+    pub fn drop_reservation(&mut self, slot: usize, range: &Range<usize>) {
+        let slot = self.slot_mut(slot);
+        slot.drop_reservation(range);
     }
 
     pub fn capacity(&self) -> usize {
@@ -67,7 +67,7 @@ where
         self.slots.len() == self.capacity()
     }
 
-    fn slot_mut(&mut self, slot: usize) -> &mut UsageSlot<V> {
+    fn slot_mut(&mut self, slot: usize) -> &mut UsageSlot {
         let index = self.slot_to_vec_index(slot);
         self.slots.get_mut(index).unwrap()
     }
@@ -82,17 +82,11 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct UsageSlot<V>
-where
-    V: Clone + PartialEq,
-{
-    ranged_usages: Vec<(Range<usize>, V)>,
+struct UsageSlot {
+    ranged_usages: Vec<Range<usize>>,
 }
 
-impl<V> Default for UsageSlot<V>
-where
-    V: Clone + PartialEq,
-{
+impl Default for UsageSlot {
     fn default() -> Self {
         Self {
             ranged_usages: Vec::new(),
@@ -100,25 +94,20 @@ where
     }
 }
 
-impl<V> UsageSlot<V>
-where
-    V: Clone + PartialEq,
-{
-    pub fn reserve(&mut self, range: Range<usize>, value: V) {
-        let reservation = (range, value);
-
-        if self.ranged_usages.contains(&reservation) {
+impl UsageSlot {
+    pub fn reserve(&mut self, range: Range<usize>) {
+        if self.ranged_usages.contains(&range) {
             panic!("Complete duplicate range-var reservation");
         }
 
-        self.ranged_usages.push(reservation);
+        self.ranged_usages.push(range);
     }
 
-    pub fn free(&mut self, range: &Range<usize>, value: &V) {
+    pub fn drop_reservation(&mut self, range: &Range<usize>) {
         let index = self
             .ranged_usages
             .iter()
-            .position(|(found_range, found_value)| (found_range, found_value) == (range, value))
+            .position(|found_range| found_range == range)
             .expect("Tried to free variable on non-reserved range");
 
         self.ranged_usages.remove(index);
@@ -127,7 +116,7 @@ where
     pub fn is_free_for_range(&self, range: &Range<usize>) -> bool {
         self.ranged_usages
             .iter()
-            .all(|(used_range, _)| !Self::ranges_overlap(range, used_range))
+            .all(|used_range| !Self::ranges_overlap(range, used_range))
     }
 
     fn ranges_overlap(a: &Range<usize>, b: &Range<usize>) -> bool {

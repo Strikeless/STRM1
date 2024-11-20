@@ -1,4 +1,6 @@
+use anyhow::anyhow;
 use itertools::Itertools;
+use libdeassembler::Deassembler;
 
 use crate::{
     lir::LIRInstruction,
@@ -34,7 +36,13 @@ impl PreallocCodegenTransformer {
     ) -> anyhow::Result<Vec<PreallocInstruction>> {
         Ok(match instruction {
             LIRInstruction::NativeMachinecode { code } => {
-                vec![PreallocInstruction::NativeMachinecode { code }]
+                let deassembler = Deassembler::new(code.iter());
+
+                let instructions = deassembler
+                    .deassemble()
+                    .map_err(|e| anyhow!("Invalid passthrough machinecode: {}", e))?;
+
+                vec![PreallocInstruction::TargetPassthrough { instructions }]
             }
             x => todo!("transform_instruction({:?})", x),
         })
