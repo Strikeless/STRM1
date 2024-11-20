@@ -5,16 +5,17 @@ use libisa::{Register, Word};
 use crate::backend::strm1::codegen::prealloc::{MemVarKey, RegVarKey, VarId, VarKey, VarTrait};
 
 pub mod allocator;
+mod neumannpass;
 mod usagemap;
 
 #[cfg(test)]
 mod tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RegVarAlloc(Register);
+pub struct RegVarAlloc(pub Register);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MemVarAlloc(Word);
+pub struct MemVarAlloc(pub Word);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VarAlloc {
@@ -22,7 +23,7 @@ pub enum VarAlloc {
     Memory(MemVarAlloc),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AllocMap(HashMap<VarId, VarAlloc>);
 
 impl AllocMap {

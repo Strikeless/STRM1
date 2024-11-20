@@ -20,11 +20,11 @@ pub enum VarId {
 
 /// A variable that must reside in a register.
 #[derive(Debug, Clone, Copy)]
-pub struct RegVarKey(VarId);
+pub struct RegVarKey(pub VarId);
 
 /// A variable that must reside in memory.
 #[derive(Debug, Clone, Copy)]
-pub struct MemVarKey(VarId);
+pub struct MemVarKey(pub VarId);
 
 #[derive(Debug, Clone, Copy)]
 pub enum VarKey {
@@ -44,32 +44,32 @@ pub enum PreallocInstruction {
 
     /// Demand a register variable reside in the given register index.
     ExplicitRegister {
-        reg_var: RegVarKey,
-        index: Register,
+        var: RegVarKey,
+        reg_index: Register,
     },
 
     /// Demand a memory variable reside in the given memory address.
     ExplicitMemory {
-        mem_var: MemVarKey,
-        addr: Word,
+        var: MemVarKey,
+        mem_addr: Word,
     },
 
     /// Load an immediate value to the destination register variable
     LoadImmediate {
-        dest_reg: RegVarKey,
+        dest: RegVarKey,
         value: Word,
     },
 
     /// Load a variable to the destination register variable
     LoadVar {
-        dest_reg: RegVarKey,
-        src_var: VarKey,
+        dest: RegVarKey,
+        src: VarKey,
     },
 
     /// Store the contents of the source register variable in the destination variable
     StoreVar {
-        dest_var: VarKey,
-        src_reg: RegVarKey,
+        dest: VarKey,
+        src: RegVarKey,
     },
 
     Add(RegVarKey, RegVarKey),
@@ -90,9 +90,15 @@ impl PreallocInstruction {
     /// Returns a list of variable IDs whose data this instruction reads or writes.
     pub fn used_vars(&self) -> Vec<&VarId> {
         match self {
-            Self::LoadImmediate { dest_reg, .. } => vec![dest_reg.id()],
-            Self::LoadVar { dest_reg, src_var } => vec![dest_reg.id(), src_var.id()],
-            Self::StoreVar { dest_var, src_reg } => vec![dest_var.id(), src_reg.id()],
+            Self::LoadImmediate { dest: dest_reg, .. } => vec![dest_reg.id()],
+            Self::LoadVar {
+                dest: dest_reg,
+                src: src_var,
+            } => vec![dest_reg.id(), src_var.id()],
+            Self::StoreVar {
+                dest: dest_var,
+                src: src_reg,
+            } => vec![dest_var.id(), src_reg.id()],
 
             Self::Add(a, b)
             | Self::Sub(a, b)

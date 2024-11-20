@@ -1,7 +1,7 @@
 mod alloc;
 mod prealloc;
 
-use alloc::AllocatorTransformer;
+use alloc::AllocTransformer;
 use libisa::instruction::Instruction as TargetInstruction;
 use prealloc::codegen::PreallocCodegenTransformer;
 
@@ -27,7 +27,7 @@ impl Transformer for CodegenTransformer {
     fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>> {
         (CmpShimTransformer) // Remember to remove if codegen learns all the cmp tricks.
             .chain(PreallocCodegenTransformer {})
-            .chain(AllocatorTransformer::new())
+            .chain(AllocTransformer::new())
             .runner()
             .run_with_extras(input)
     }

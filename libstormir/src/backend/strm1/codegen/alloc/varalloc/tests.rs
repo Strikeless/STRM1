@@ -1,6 +1,6 @@
 use std::assert_matches::assert_matches;
 
-use crate::backend::strm1::codegen::{alloc::allocation::VarAlloc, prealloc::VarId};
+use crate::backend::strm1::codegen::{alloc::varalloc::VarAlloc, prealloc::VarId};
 
 use super::allocator::{AllocRequirement, VarAllocator};
 

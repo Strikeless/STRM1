@@ -22,6 +22,13 @@ pub enum AllocRequirement {
     Memory,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct VarDefinition {
+    pub lifetime: Range<usize>,
+    pub importance: usize,
+    pub alloc_requirement: AllocRequirement,
+}
+
 impl VarAllocator {
     pub fn new() -> Self {
         Self::default()
@@ -78,13 +85,10 @@ impl VarAllocator {
     pub fn contains_id(&self, id: &VarId) -> bool {
         self.definitions.contains_key(id)
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct VarDefinition {
-    lifetime: Range<usize>,
-    importance: usize,
-    alloc_requirement: AllocRequirement,
+    pub fn get_definition(&self, id: &VarId) -> Option<&VarDefinition> {
+        self.definitions.get(id)
+    }
 }
 
 struct InnerBuilder {
