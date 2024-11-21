@@ -1,8 +1,8 @@
 use libisa::{instruction::Instruction as TargetInstruction, Register, Word};
-
-use crate::lir::LIRVarId;
+use varidspace::VarIdSpace;
 
 pub mod codegen;
+pub mod varidspace;
 
 /// The actual identifier part of variables that must be unique for every new variable.
 /// Everything on top of this is just type enforcement, and does not affect which allocation is referred to.
@@ -10,13 +10,7 @@ pub mod codegen;
 /// e.g. a [`RegVarKey(VarId::Internal(1))`] may refer to the same allocation as
 /// [`VarKey(MemVarKey(VarId::Internal(1)))`], and these two should never coexist.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum VarId {
-    /// Variable emitted by the compiler for internal use.
-    Internal(usize),
-
-    /// Variable defined in the LIR.
-    LIR(LIRVarId),
-}
+pub struct VarId(pub VarIdSpace, pub u64);
 
 /// A variable that must reside in a register.
 #[derive(Debug, Clone, Copy)]
@@ -72,6 +66,10 @@ pub enum PreallocInstruction {
         src: RegVarKey,
     },
 
+    Jmp(RegVarKey),
+    JmpC(RegVarKey),
+    JmpZ(RegVarKey),
+
     Add(RegVarKey, RegVarKey),
     Sub(RegVarKey, RegVarKey),
     AddC(RegVarKey, RegVarKey),
@@ -99,6 +97,8 @@ impl PreallocInstruction {
                 dest: dest_var,
                 src: src_reg,
             } => vec![dest_var.id(), src_reg.id()],
+
+            Self::Jmp(addr) | Self::JmpC(addr) | Self::JmpZ(addr) => vec![addr.id()],
 
             Self::Add(a, b)
             | Self::Sub(a, b)

@@ -47,6 +47,7 @@ impl AllocMap {
         }
     }
 
+    #[allow(unused)] // It's here for consistency with get_reg and potential future use.
     pub fn get_mem(&self, key: &MemVarKey) -> Option<&MemVarAlloc> {
         match self.0.get(key.id()) {
             Some(VarAlloc::Memory(mem_alloc)) => Some(mem_alloc),

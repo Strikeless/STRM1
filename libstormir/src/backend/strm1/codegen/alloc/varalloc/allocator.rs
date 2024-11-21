@@ -100,7 +100,7 @@ impl InnerBuilder {
     pub fn new() -> Self {
         Self {
             reg_usage_map: RangedUsageMap::new(libisa::REGISTER_COUNT).preallocated(),
-            mem_usage_map: RangedUsageMap::new(Word::MAX as usize), // TODO: Offset memory accesses in a post-pass, not done here.
+            mem_usage_map: RangedUsageMap::new(Word::MAX as usize),
         }
     }
 

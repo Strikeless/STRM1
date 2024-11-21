@@ -1,15 +1,24 @@
 use std::assert_matches::assert_matches;
 
-use crate::backend::strm1::codegen::{alloc::varalloc::VarAlloc, prealloc::VarId};
+use lazy_static::lazy_static;
+
+use crate::backend::strm1::codegen::{
+    alloc::varalloc::VarAlloc,
+    prealloc::{varidspace::VarIdSpace, VarId},
+};
 
 use super::allocator::{AllocRequirement, VarAllocator};
+
+lazy_static! {
+    static ref INTERNAL_VAR_SPACE: VarIdSpace = VarIdSpace::new();
+}
 
 #[test]
 fn build_bigger_alloc_map() -> anyhow::Result<()> {
     let mut allocator = VarAllocator::new();
 
     for i in 0..10000 {
-        let id = VarId::Internal(i);
+        let id = VarId(*INTERNAL_VAR_SPACE, i);
         allocator.define(id, 0, 0, AllocRequirement::Generic)?;
         allocator.extend_lifetime(&id, 1)?;
     }
@@ -21,7 +30,7 @@ fn build_bigger_alloc_map() -> anyhow::Result<()> {
 fn register_alloc_by_default() -> anyhow::Result<()> {
     let mut allocator = VarAllocator::new();
 
-    let id = VarId::Internal(0);
+    let id = VarId(*INTERNAL_VAR_SPACE, 0);
 
     allocator.define(id, 0, 0, AllocRequirement::Generic)?;
     allocator.extend_lifetime(&id, 1)?;
@@ -41,11 +50,11 @@ fn register_alloc_by_default() -> anyhow::Result<()> {
 fn register_alloc_by_importance() -> anyhow::Result<()> {
     let mut allocator = VarAllocator::new();
 
-    let id = VarId::Internal(0);
+    let id = VarId(*INTERNAL_VAR_SPACE, 0);
 
     // Try to fill up any free registers with low importance variables.
     for i in 0..libisa::REGISTER_COUNT {
-        let id = VarId::Internal(1 + i);
+        let id = VarId(*INTERNAL_VAR_SPACE, 1 + i as u64);
         allocator.define(id, 0, 0, AllocRequirement::Generic)?;
         allocator.extend_lifetime(&id, 1)?;
     }
@@ -69,11 +78,11 @@ fn register_alloc_by_importance() -> anyhow::Result<()> {
 fn register_alloc_by_requirement() -> anyhow::Result<()> {
     let mut allocator = VarAllocator::new();
 
-    let id = VarId::Internal(0);
+    let id = VarId(*INTERNAL_VAR_SPACE, 0);
 
     // Try to fill up any free registers with generic, yet high importance variables.
     for i in 0..libisa::REGISTER_COUNT {
-        let id = VarId::Internal(1 + i);
+        let id = VarId(*INTERNAL_VAR_SPACE, 1 + i as u64);
         allocator.define(id, 0, usize::MAX, AllocRequirement::Generic)?;
         allocator.extend_lifetime(&id, 1)?;
     }
@@ -96,11 +105,11 @@ fn register_alloc_by_requirement() -> anyhow::Result<()> {
 fn memory_alloc_by_default_fallback() -> anyhow::Result<()> {
     let mut allocator = VarAllocator::new();
 
-    let id = VarId::Internal(0);
+    let id = VarId(*INTERNAL_VAR_SPACE, 0);
 
     // Try to fill up any free registers with variables that require the registers.
     for i in 0..libisa::REGISTER_COUNT {
-        let id = VarId::Internal(1 + i);
+        let id = VarId(*INTERNAL_VAR_SPACE, 1 + i as u64);
         allocator.define(id, 0, 0, AllocRequirement::Register)?;
         allocator.extend_lifetime(&id, 1)?;
     }

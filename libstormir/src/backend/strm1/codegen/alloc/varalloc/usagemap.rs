@@ -45,11 +45,6 @@ impl RangedUsageMap {
         slot.reserve(range);
     }
 
-    pub fn drop_reservation(&mut self, slot: usize, range: &Range<usize>) {
-        let slot = self.slot_mut(slot);
-        slot.drop_reservation(range);
-    }
-
     pub fn capacity(&self) -> usize {
         self.usable_region.len()
     }
@@ -101,16 +96,6 @@ impl UsageSlot {
         }
 
         self.ranged_usages.push(range);
-    }
-
-    pub fn drop_reservation(&mut self, range: &Range<usize>) {
-        let index = self
-            .ranged_usages
-            .iter()
-            .position(|found_range| found_range == range)
-            .expect("Tried to free variable on non-reserved range");
-
-        self.ranged_usages.remove(index);
     }
 
     pub fn is_free_for_range(&self, range: &Range<usize>) -> bool {

@@ -1,6 +1,6 @@
 pub mod shim;
 
-pub type LIRVarId = usize;
+pub type LIRVarId = u64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LIRInstruction {

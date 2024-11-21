@@ -68,6 +68,9 @@ impl AllocTransformer {
             PreallocInstruction::TargetPassthrough { instructions } => instructions.len() as Word,
 
             PreallocInstruction::LoadImmediate { .. }
+            | PreallocInstruction::Jmp(..)
+            | PreallocInstruction::JmpC(..)
+            | PreallocInstruction::JmpZ(..)
             | PreallocInstruction::Add(..)
             | PreallocInstruction::Sub(..)
             | PreallocInstruction::AddC(..)

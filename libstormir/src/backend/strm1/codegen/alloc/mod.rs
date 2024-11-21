@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context};
 use itertools::Itertools;
+use lazy_static::lazy_static;
 use libisa::instruction::{kind::InstructionKind, Instruction as TargetInstruction};
 use varalloc::{
     allocator::{AllocRequirement, VarAllocator},
@@ -11,12 +12,18 @@ use crate::{
     transformer::{extra::Extra, Transformer},
 };
 
-use super::prealloc::{MemVarKey, PreallocInstruction, RegVarKey, VarTrait};
+use super::prealloc::{
+    varidspace::VarIdSpace, MemVarKey, PreallocInstruction, RegVarKey, VarTrait,
+};
 
 mod varalloc;
 
 #[cfg(test)]
 mod tests;
+
+lazy_static! {
+    static ref INTERNAL_VAR_SPACE: VarIdSpace = VarIdSpace::new();
+}
 
 #[derive(Debug, Default)]
 pub struct AllocTransformer {
@@ -70,7 +77,7 @@ impl AllocTransformer {
                     allocator.define(*key.id(), instruction_index, 0, alloc_requirement)?;
                 }
 
-                PreallocInstruction::StoreVar { dest, src } => {
+                PreallocInstruction::StoreVar { dest, .. } => {
                     let dest_var = allocator.get_definition(dest.id()).ok_or_else(|| {
                         anyhow!("Undefined variable")
                             .context("dest")
@@ -80,7 +87,7 @@ impl AllocTransformer {
                     if dest_var.alloc_requirement != AllocRequirement::Register {
                         // The destination variable could end up in memory, in which case the main pass requires an
                         // internal register for storing it's memory address, so allocate that here.
-                        let id = VarId::Internal(instruction_index);
+                        let id = VarId(*INTERNAL_VAR_SPACE, instruction_index as u64);
                         allocator.define(id, instruction_index, 0, AllocRequirement::Register)?;
                         allocator.extend_lifetime(&id, instruction_index + 1)?; // The register is only needed for this instruction.
                     }
@@ -164,7 +171,8 @@ impl AllocTransformer {
                     }
                     VarAlloc::Memory(dest_mem) => {
                         // Allocated in prepass.
-                        let internal_addr_var_id = &RegVarKey(VarId::Internal(instruction_index));
+                        let internal_addr_var_id =
+                            &RegVarKey(VarId(*INTERNAL_VAR_SPACE, instruction_index as u64));
                         let internal_addr_reg = self.reg_var(internal_addr_var_id)?.0;
 
                         vec![
@@ -180,6 +188,21 @@ impl AllocTransformer {
                     }
                 }
             }
+
+            PreallocInstruction::Jmp(addr) => self
+                .transform_single_reg_operand(InstructionKind::Jmp, addr)
+                .context("addr")
+                .context("Jmp")?,
+
+            PreallocInstruction::JmpC(addr) => self
+                .transform_single_reg_operand(InstructionKind::JmpC, addr)
+                .context("addr")
+                .context("JmpC")?,
+
+            PreallocInstruction::JmpZ(addr) => self
+                .transform_single_reg_operand(InstructionKind::JmpZ, addr)
+                .context("addr")
+                .context("JmpZ")?,
 
             PreallocInstruction::Add(a_reg, b_reg) => self
                 .transform_dual_reg_operand(InstructionKind::Add, a_reg, b_reg)
@@ -199,6 +222,16 @@ impl AllocTransformer {
 
             PreallocInstruction::TargetPassthrough { instructions } => instructions,
         })
+    }
+
+    fn transform_single_reg_operand(
+        &self,
+        kind: InstructionKind,
+        reg: RegVarKey,
+    ) -> anyhow::Result<Vec<TargetInstruction>> {
+        let reg_a = self.reg_var(&reg)?.0;
+
+        Ok(vec![TargetInstruction::new(kind).with_reg_a(reg_a)])
     }
 
     fn transform_dual_reg_operand(
@@ -228,6 +261,7 @@ impl AllocTransformer {
             .ok_or_else(|| anyhow!("Undefined variable"))
     }
 
+    #[allow(unused)] // It's here for consistency with reg_var and potential future use.
     fn mem_var(&self, key: &MemVarKey) -> anyhow::Result<&MemVarAlloc> {
         self.alloc_map
             .get_mem(key)
