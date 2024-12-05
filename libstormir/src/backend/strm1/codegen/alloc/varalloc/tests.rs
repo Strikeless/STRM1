@@ -9,8 +9,6 @@ use crate::backend::strm1::codegen::{
 
 use super::allocator::{AllocRequirement, VarAllocator};
 
-pub mod varalloctest;
-
 lazy_static! {
     static ref INTERNAL_VAR_SPACE: VarIdSpace = VarIdSpace::new();
 }

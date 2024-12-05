@@ -1,9 +1,11 @@
+use std::collections::HashMap;
+
 use anyhow::{anyhow, Context};
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use libisa::instruction::{kind::InstructionKind, Instruction as TargetInstruction};
 use varalloc::{
-    allocator::{AllocRequirement, VarAllocator},
+    allocator::{AllocRequirement, VarAllocator, VarDefinition},
     AllocMap, MemVarAlloc, RegVarAlloc, VarAlloc,
 };
 
@@ -21,7 +23,9 @@ mod varalloc;
 #[cfg(test)]
 pub mod tests;
 
-pub const ALLOC_MAP_RMP_EXTRA_KEY: &'static str = "strm1_alloc_map_rmp_extra_key";
+// No reason for alloc extras to be public as the data structures are private.
+const ALLOC_MAP_RMP_EXTRA_KEY: &'static str = "strm1_alloc_map_rmp_extra_key";
+const ALLOC_METADATA_RMP_EXTRA_KEY: &'static str = "strm1_alloc_metadata_rmp_extra_key";
 
 lazy_static! {
     static ref INTERNAL_VAR_SPACE: VarIdSpace = VarIdSpace::new();
@@ -30,6 +34,7 @@ lazy_static! {
 #[derive(Debug, Default)]
 pub struct AllocTransformer {
     alloc_map: AllocMap,
+    alloc_metadata: HashMap<VarId, VarDefinition>,
 }
 
 impl AllocTransformer {
@@ -51,19 +56,24 @@ impl Transformer for AllocTransformer {
     ];
 
     fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>> {
-        let alloc_map_rmp_extra = rmp_serde::to_vec(&self.alloc_map).context("Serializing alloc map for extra")?;
+        let alloc_map_rmp_extra =
+            rmp_serde::to_vec(&self.alloc_map).context("Serializing alloc map for extra")?;
+
+        let alloc_metadata_rmp_extra = rmp_serde::to_vec(&self.alloc_metadata)
+            .context("Serializing alloc metadata for extra")?;
 
         input
             .with_extra(&ALLOC_MAP_RMP_EXTRA_KEY, alloc_map_rmp_extra)
+            .with_extra(&ALLOC_METADATA_RMP_EXTRA_KEY, alloc_metadata_rmp_extra)
             .try_map_data(|lir| {
-            lir.into_iter()
-                .enumerate()
-                .map(|(instruction_index, instruction)| {
-                    self.transform_instruction(instruction_index, instruction)
-                })
-                .flatten_ok()
-                .try_collect()
-        })
+                lir.into_iter()
+                    .enumerate()
+                    .map(|(instruction_index, instruction)| {
+                        self.transform_instruction(instruction_index, instruction)
+                    })
+                    .flatten_ok()
+                    .try_collect()
+            })
     }
 }
 
@@ -115,6 +125,7 @@ impl AllocTransformer {
             }
         }
 
+        self.alloc_metadata = allocator.definition_map().clone();
         self.alloc_map = allocator.build()?;
         Ok(())
     }

@@ -10,6 +10,8 @@ use crate::{
 
 mod codegen;
 mod machinecode;
+
+#[cfg(test)]
 mod tests;
 
 pub struct STRM1Transformer;

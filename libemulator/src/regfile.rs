@@ -24,6 +24,8 @@ where
         self.0.clone().map(|traced| *traced.value())
     }
 
+    // TODO: Register accesses should probably return options, as they may be used externally without that much thought.
+
     pub fn register(&self, index: usize) -> Word {
         *self
             .0
@@ -46,7 +48,7 @@ where
             .value_mut_untraced()
     }
 
-    pub fn trace(&self, index: usize) -> Option<&T> {
-        self.0.get(index).map(|traced| &traced.trace_data)
+    pub fn trace(&self, index: usize) -> &T {
+        &self.0.get(index).expect("Out of bounds register trace access").trace_data
     }
 }

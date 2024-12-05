@@ -6,7 +6,7 @@ type BackingId = u64;
 type AtomicBackingId = AtomicU64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct VarIdSpace(u64);
+pub struct VarIdSpace(BackingId);
 
 impl VarIdSpace {
     /// Create a new and unique space.

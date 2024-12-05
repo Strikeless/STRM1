@@ -1,4 +1,4 @@
-mod alloc;
+pub mod alloc;
 mod prealloc;
 
 use alloc::AllocTransformer;

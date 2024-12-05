@@ -7,6 +7,8 @@ use std::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Extra<T> {
     pub data: T,
+
+    // TODO: Make extras less painful to use by automating or eliminating manual (de)serialization.
     pub extra: HashMap<String, Vec<u8>>,
 }
 

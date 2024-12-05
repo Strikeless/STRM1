@@ -79,8 +79,8 @@ fn register_traces() {
         Instruction::new(InstructionKind::Halt),
     ]);
 
-    let trace_a = emulator.reg_file.trace(reg_a).unwrap();
-    let trace_b = emulator.reg_file.trace(reg_b).unwrap();
+    let trace_a = emulator.reg_file.trace(reg_a);
+    let trace_b = emulator.reg_file.trace(reg_b);
 
     assert_eq!(trace_a.traces, [1 * libisa::BYTES_PER_WORD], "register A");
     assert_eq!(

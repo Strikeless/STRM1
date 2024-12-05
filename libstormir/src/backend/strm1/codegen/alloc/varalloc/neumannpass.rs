@@ -31,6 +31,7 @@ impl AllocTransformer {
             });
 
         // TODO: Explicit addresses shouldn't be changed here when they get implemented.
+        // Quite safe to assume for this project that the backend doesn't do any polymorphism that this would break.
         for mem_alloc in mem_allocs {
             mem_alloc.0 += code_len;
         }

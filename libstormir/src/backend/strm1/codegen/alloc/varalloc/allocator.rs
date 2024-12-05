@@ -3,6 +3,7 @@ use std::{collections::HashMap, ops::Range};
 use anyhow::anyhow;
 use itertools::Itertools;
 use libisa::Word;
+use serde::{Deserialize, Serialize};
 
 use crate::backend::strm1::codegen::prealloc::VarId;
 
@@ -13,7 +14,7 @@ pub struct VarAllocator {
     definitions: HashMap<VarId, VarDefinition>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum AllocRequirement {
     #[default]
     Generic,
@@ -22,7 +23,7 @@ pub enum AllocRequirement {
     Memory,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct VarDefinition {
     pub lifetime: Range<usize>,
     pub importance: usize,
@@ -80,6 +81,10 @@ impl VarAllocator {
 
     pub fn build(self) -> anyhow::Result<AllocMap> {
         InnerBuilder::new().build(self.definitions)
+    }
+
+    pub fn definition_map(&self) -> &HashMap<VarId, VarDefinition> {
+        &self.definitions
     }
 
     pub fn contains_id(&self, id: &VarId) -> bool {
