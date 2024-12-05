@@ -12,7 +12,9 @@ use crate::{
 use super::{varidspace::VarIdSpace, PreallocInstruction};
 
 lazy_static! {
-    static ref LIR_VAR_SPACE: VarIdSpace = VarIdSpace::new();
+    // Public for VarAllocTest
+    pub(crate) static ref LIR_VAR_SPACE: VarIdSpace = VarIdSpace::new();
+
     static ref INTERNAL_VAR_SPACE: VarIdSpace = VarIdSpace::new();
 
     // A second internal space may be needed to have two simultaneously allocated internal registers.

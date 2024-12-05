@@ -19,7 +19,9 @@ use super::prealloc::{
 mod varalloc;
 
 #[cfg(test)]
-mod tests;
+pub mod tests;
+
+pub const ALLOC_MAP_RMP_EXTRA_KEY: &'static str = "strm1_alloc_map_rmp_extra_key";
 
 lazy_static! {
     static ref INTERNAL_VAR_SPACE: VarIdSpace = VarIdSpace::new();
@@ -49,7 +51,11 @@ impl Transformer for AllocTransformer {
     ];
 
     fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>> {
-        input.try_map_data(|lir| {
+        let alloc_map_rmp_extra = rmp_serde::to_vec(&self.alloc_map).context("Serializing alloc map for extra")?;
+
+        input
+            .with_extra(&ALLOC_MAP_RMP_EXTRA_KEY, alloc_map_rmp_extra)
+            .try_map_data(|lir| {
             lir.into_iter()
                 .enumerate()
                 .map(|(instruction_index, instruction)| {

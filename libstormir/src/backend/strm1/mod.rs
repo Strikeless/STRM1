@@ -10,8 +10,15 @@ use crate::{
 
 mod codegen;
 mod machinecode;
+mod tests;
 
 pub struct STRM1Transformer;
+
+impl STRM1Transformer {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
 
 impl Transformer for STRM1Transformer {
     type Input = Vec<LIRInstruction>;

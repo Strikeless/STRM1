@@ -1,4 +1,5 @@
 use libisa::{instruction::Instruction as TargetInstruction, Register, Word};
+use serde::{Deserialize, Serialize};
 use varidspace::VarIdSpace;
 
 pub mod codegen;
@@ -9,7 +10,7 @@ pub mod varidspace;
 ///
 /// e.g. a [`RegVarKey(VarId::Internal(1))`] may refer to the same allocation as
 /// [`VarKey(MemVarKey(VarId::Internal(1)))`], and these two should never coexist.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct VarId(pub VarIdSpace, pub u64);
 
 /// A variable that must reside in a register.

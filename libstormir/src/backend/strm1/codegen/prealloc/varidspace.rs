@@ -1,9 +1,11 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use serde::{Deserialize, Serialize};
+
 type BackingId = u64;
 type AtomicBackingId = AtomicU64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct VarIdSpace(u64);
 
 impl VarIdSpace {

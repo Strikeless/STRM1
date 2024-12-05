@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use libisa::{Register, Word};
+use serde::{Deserialize, Serialize};
 
 use crate::backend::strm1::codegen::prealloc::{MemVarKey, RegVarKey, VarId, VarKey, VarTrait};
 
@@ -11,19 +12,19 @@ mod usagemap;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegVarAlloc(pub Register);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemVarAlloc(pub Word);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VarAlloc {
     Register(RegVarAlloc),
     Memory(MemVarAlloc),
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AllocMap(HashMap<VarId, VarAlloc>);
 
 impl AllocMap {
