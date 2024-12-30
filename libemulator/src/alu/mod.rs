@@ -15,16 +15,12 @@ impl ALU {
     }
 
     pub fn add(&mut self, a: Word, b: Word) -> Word {
-        let value = a.wrapping_add(b);
-        let carry = (a as usize + b as usize) > Word::MAX as usize;
-
+        let (value, carry) = a.overflowing_add(b);
         self.flags_by(value, carry)
     }
 
     pub fn sub(&mut self, a: Word, b: Word) -> Word {
-        let value = a.wrapping_sub(b);
-        let carry = b > a;
-
+        let (value, carry) = a.overflowing_sub(b);
         self.flags_by(value, carry)
     }
 

@@ -1,6 +1,8 @@
 pub mod instruction;
 
 pub type Word = u16;
+pub type WordSigned = i16;
+
 pub const BYTES_PER_WORD: usize = 2;
 
 pub type Register = usize;

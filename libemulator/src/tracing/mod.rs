@@ -1,48 +1,40 @@
-use std::fmt::Debug;
+use std::collections::HashMap;
 
-use crate::Emulator;
+use libisa::Word;
 
-pub mod none;
-pub mod pc;
+use crate::memory::MemoryPatch;
 
-#[derive(Debug, Clone, Copy)]
-pub struct Traced<T, D>
-where
-    D: TraceData,
-{
-    pub trace_data: D,
-    value: T,
+#[cfg(test)]
+mod tests;
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct EmulatorTracing {
+    pub traces_by_pc: HashMap<Word, EmulatorTrace>,
 }
 
-impl<T, D> Traced<T, D>
-where
-    D: TraceData,
-{
-    pub fn new(value: T) -> Self {
-        Self {
-            value,
-            trace_data: D::default(),
-        }
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct EmulatorTrace {
+    pub iterations: Vec<EmulatorIterationTrace>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmulatorIterationTrace {
+    pub memory_patches: Vec<MemoryPatch>,
+}
+
+impl EmulatorTracing {
+    pub fn trace_by_pc(&self, pc: Word) -> Option<&EmulatorTrace> {
+        self.traces_by_pc.get(&pc)
     }
 
-    pub fn value(&self) -> &T {
-        &self.value
-    }
-
-    pub fn value_mut(&mut self, trace: D::Trace) -> &mut T {
-        self.trace_data.add_trace(trace);
-        self.value_mut_untraced()
-    }
-
-    pub fn value_mut_untraced(&mut self) -> &mut T {
-        &mut self.value
+    pub(super) fn add_iteration_trace(&mut self, pc: Word, iteration_trace: EmulatorIterationTrace) {
+        let trace = self.traces_by_pc.entry(pc).or_default();
+        trace.iterations.push(iteration_trace);
     }
 }
 
-pub trait TraceData: Default + Debug + Clone {
-    type Trace: Default + Debug + Copy;
-
-    fn trace_from_state(emulator: &Emulator<Self>) -> Self::Trace;
-
-    fn add_trace(&mut self, trace: Self::Trace);
+impl EmulatorTrace {
+    pub fn iteration(&self, iteration: usize) -> Option<&EmulatorIterationTrace> {
+        self.iterations.get(iteration)
+    }
 }

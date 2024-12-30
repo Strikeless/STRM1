@@ -1,51 +1,95 @@
-use std::iter;
+#![feature(array_chunks, array_windows)]
+
+mod alu;
+mod memory;
+mod volatilehelper;
+mod execute;
+mod tracing;
 
 use alu::ALU;
-use anyhow::anyhow;
-use libisa::Word;
-use memory::Memory;
-use regfile::RegFile;
-use tracing::TraceData;
+use anyhow::Context;
+use libisa::{instruction::{Instruction, InstructionDeassemblyError}, Word};
+use thiserror::Error;
+use memory::{word::WordWrapper, Memory};
+use tracing::{EmulatorIterationTrace, EmulatorTracing};
 
-pub mod alu;
-pub mod execute;
-pub mod memory;
-pub mod regfile;
-pub mod tracing;
-
-pub struct Emulator<T>
-where
-    T: TraceData,
-{
-    pub memory: Memory<T>,
-    pub reg_file: RegFile<T>,
+pub struct Emulator {
+    pub memory: Memory<{ Word::MAX as usize }>,
+    pub reg_file: [Word; libisa::REGISTER_COUNT],
     pub alu: ALU,
     pub pc: Word,
 
-    current_trace: T::Trace,
+    pub tracing: EmulatorTracing,
 }
 
-impl<T> Emulator<T>
-where
-    T: TraceData,
-{
-    pub fn new(memory_size: Word, program: Vec<u8>) -> anyhow::Result<Self> {
-        if program.len() > memory_size as usize {
-            return Err(anyhow!("Program doesn't fit into memory of specified size"));
-        }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecuteOk {
+    Normal,
+    Halted,
+}
 
-        let memory_data = program
-            .into_iter()
-            .chain(iter::repeat(0))
-            .take(memory_size as usize)
-            .collect();
+#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
+pub enum ExecuteErr {
+    #[error("Memory access violation to 0x{0:04x}")]
+    MemoryAccessViolation(Word),
 
+    #[error("Illegal instruction ({0})")]
+    IllegalInstruction(InstructionDeassemblyError),
+}
+
+impl Emulator {
+    pub fn new(program: Vec<u8>) -> anyhow::Result<Self> {
         Ok(Self {
-            memory: Memory::new(memory_data),
-            reg_file: RegFile::new(),
+            memory: Memory::new_with_data(program)
+                .with_context(|| "Loading program to memory")?,
+
+            reg_file: [0; libisa::REGISTER_COUNT],
             alu: ALU::new(),
             pc: 0,
-            current_trace: T::Trace::default(),
+            tracing: EmulatorTracing::default()
         })
+    }
+
+    pub fn execute_to_halt(&mut self) -> Result<(), ExecuteErr> {
+        loop {
+            let exec_ok = self.execute_instruction()?;
+
+            if exec_ok == ExecuteOk::Halted {
+                return Ok(());
+            }
+        }
+    }
+
+    pub fn execute_instruction(&mut self) -> Result<ExecuteOk, ExecuteErr> {
+        let instruction_pc = self.pc;
+        let instruction = self.parse_next_instruction()?;
+        let exec_result = self.execute_parsed_instruction(instruction);
+
+        let memory_patches: Vec<_> = self.memory.pop_patches().collect();
+        self.tracing.add_iteration_trace(instruction_pc, EmulatorIterationTrace {
+            memory_patches,
+        });
+
+        exec_result
+    }
+
+    fn parse_next_instruction(&mut self) -> Result<Instruction, ExecuteErr> {
+        let instruction_word = *self.pc_next()?;
+
+        let mut instruction = Instruction::deassemble_instruction_word(instruction_word)
+            .map_err(|e| ExecuteErr::IllegalInstruction(e))?;
+
+        if instruction.kind.has_immediate() {
+            let immediate_word = *self.pc_next()?;
+            instruction.immediate = Some(immediate_word);
+        }
+
+        Ok(instruction)
+    }
+
+    fn pc_next(&mut self) -> Result<WordWrapper, ExecuteErr> {
+        let pc_word = self.mem_word_or_err(self.pc)?;
+        self.pc = self.pc.wrapping_add_signed(libisa::BYTES_PER_WORD as libisa::WordSigned);
+        Ok(pc_word)
     }
 }

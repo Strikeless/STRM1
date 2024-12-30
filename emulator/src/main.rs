@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use clap::Parser;
 use command::{Command, CommandError};
 use libdeassembler::Deassembler;
-use libemulator::{tracing::none::NoTraceData, Emulator};
+use libemulator::{Emulator, ExecuteOk};
 use libisa::Word;
 use log::{error, info, LevelFilter};
 
@@ -39,7 +39,7 @@ fn main() {
 
 struct Cli {
     args: Args,
-    emulator: Emulator<NoTraceData>,
+    emulator: Emulator,
 }
 
 impl Cli {
@@ -47,7 +47,7 @@ impl Cli {
         let program =
             fs::read(&args.program_path).map_err(|e| anyhow!("Couldn't read program: {}", e))?;
 
-        let emulator = Emulator::new(args.memory_size, program)?;
+        let emulator = Emulator::new(program)?;
 
         Ok(Self { args, emulator })
     }
@@ -72,8 +72,11 @@ impl Cli {
             "e" | "exec" | "execute" => {
                 let instruction_count: usize = cmd_args.next_parsed().unwrap_or(Ok(1))?;
 
-                for _ in 0..instruction_count {
-                    self.emulator.execute_instruction()?;
+                for instruction_index in 0..instruction_count {
+                    if self.emulator.execute_instruction()? == ExecuteOk::Halted {
+                        println!("Halted after {} executed instructions.", instruction_index + 1);
+                        break
+                    }
                 }
             }
 
@@ -91,7 +94,7 @@ impl Cli {
                 info!("Deassembled: {}", self.deassemble_pc_instruction());
                 info!(
                     "Registers:   {:05?}",
-                    self.emulator.reg_file.array_clone_untraced()
+                    self.emulator.reg_file
                 );
                 info!("ALU flags:   {:?}", set_alu_flags);
             }
@@ -101,12 +104,12 @@ impl Cli {
                 let len: Word = cmd_args.next_parsed()??;
 
                 let words = (addr..addr + len)
-                    .step_by(2)
-                    .map(|addr| self.emulator.memory.word(addr).unwrap_or(0))
+                    .step_by(libisa::BYTES_PER_WORD)
+                    .map(|addr| *self.emulator.memory.word(addr).as_deref().unwrap_or(&0))
                     .collect::<Vec<_>>();
 
                 let bytes = (addr..addr + len)
-                    .map(|addr| self.emulator.memory.byte(addr).unwrap_or(0))
+                    .map(|addr| *self.emulator.memory.byte(addr).as_deref().unwrap_or(&0))
                     .collect::<Vec<_>>();
 
                 let output = match cmd_args.next()? {
@@ -115,7 +118,7 @@ impl Cli {
                     "xb" | "hexb" => format!("{:x?}", bytes),
                     "xw" | "hexw" => format!("{:x?}", words),
                     // No binary because apparently {:b?} wont do for whatever reason.
-                    "s" | "utf8" => String::from_utf8_lossy(&bytes).to_string(),
+                    "s" | "utf8" => String::from_utf8_lossy(bytes.as_slice()).to_string(),
                     _ => {
                         return Err(CommandError::ParseError(
                             "Output format should be [d]ec(b/w), he[x](b/w), or utf8 [s]"
@@ -145,7 +148,7 @@ impl Cli {
         let mut deassembler = Deassembler::new(
             self.emulator
                 .memory
-                .iter_untraced()
+                .iter_bytes()
                 .skip(self.emulator.pc as usize),
         );
 

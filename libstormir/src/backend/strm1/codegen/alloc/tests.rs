@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, fs, path::PathBuf};
 
 use anyhow::Context;
-use libemulator::{execute::ExecuteOk, tracing::pc::PCTraceData, Emulator};
+use libemulator::{Emulator, ExecuteOk};
 use libisa::Word;
 
 use crate::{
@@ -21,7 +21,7 @@ use super::{
 
 pub struct EmulatorTest {
     pub inner: Test,
-    pub emulator: Emulator<PCTraceData>,
+    pub emulator: Emulator,
 
     alloc_map: AllocMap,
     alloc_metadata: HashMap<VarId, VarDefinition>,
@@ -31,7 +31,7 @@ impl EmulatorTest {
     pub fn new(inner: Test) -> anyhow::Result<Self> {
         let program = inner.compilation_output.data.clone();
 
-        let emulator = Emulator::new(Word::MAX, program).context("Error creating emulator")?;
+        let emulator = Emulator::new(program).context("Error creating emulator")?;
 
         let alloc_map_rmp = inner
             .compilation_output
@@ -69,12 +69,7 @@ impl EmulatorTest {
         let var_alloc = self.alloc_map.get(&var_key)?;
         let var_metadata = self.alloc_metadata.get(var_key.id())?;
 
-        let trace = match var_alloc {
-            VarAlloc::Register(RegVarAlloc(reg_index)) => Some(self.emulator.reg_file.trace(*reg_index)),
-            VarAlloc::Memory(MemVarAlloc(mem_addr)) => self.emulator.memory.trace(*mem_addr),
-        }?;
-
-        // TODO: Make emulator traces store the value at the time of the trace.
+        // TODO: Utilize emulator tracing to get the variable value.
         todo!()
     }
 
@@ -87,9 +82,9 @@ impl EmulatorTest {
 
         match var_alloc {
             VarAlloc::Register(RegVarAlloc(reg_index)) => {
-                Some(self.emulator.reg_file.register(*reg_index))
+                self.emulator.reg_file.get(*reg_index).copied()
             }
-            VarAlloc::Memory(MemVarAlloc(mem_addr)) => self.emulator.memory.word(*mem_addr),
+            VarAlloc::Memory(MemVarAlloc(mem_addr)) => self.emulator.memory.word(*mem_addr).as_deref().copied(),
         }
     }
 

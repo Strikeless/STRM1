@@ -1,20 +1,35 @@
-use crate::tracing::none::NoTraceData;
+use crate::memory::Memory;
 
-use super::Memory;
+#[test]
+fn word_returns_expected() {
+    let expected_word = 0xABCD;
+    let word_bytes = libisa::word_to_bytes(expected_word);
+
+    let volatile = Memory::<{ libisa::BYTES_PER_WORD }>::new_with_data(word_bytes)
+        .expect("Creating volatile");
+
+    let actual_word = volatile.word(0).expect("Getting word");
+
+    assert_eq!(
+        *actual_word, expected_word,
+        "Got word {:x?} differs from expected {:x?}",
+        *actual_word, word_bytes
+    );
+}
 
 #[test]
 fn word_mut_patches_correctly() {
-    let magic = 0xABCD;
-    let expected_data = libisa::word_to_bytes(magic);
+    let magic_word = 0xABCD;
+    let expected_bytes = libisa::word_to_bytes(magic_word);
 
-    let mut memory = Memory::<NoTraceData>::new(vec![0; 2]);
-    *memory.word_mut_untraced(0).unwrap() = magic;
+    let mut volatile = Memory::<{ libisa::BYTES_PER_WORD }>::new();
+    *volatile.word_mut(0).unwrap() = magic_word;
 
-    let memory_data: Vec<_> = memory.iter_untraced().map(|data_ref| *data_ref).collect();
+    let actual_bytes: Vec<_> = volatile.iter_bytes().map(|data_ref| *data_ref).collect();
 
     assert_eq!(
-        &memory_data, &expected_data,
+        &actual_bytes, &expected_bytes,
         "memory data {:x?} differs from expected {:x?}",
-        memory_data, expected_data
-    )
+        actual_bytes, expected_bytes
+    );
 }

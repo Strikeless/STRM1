@@ -25,9 +25,7 @@ char_loop:
 
 end:
     loadi %2, $1337
-
-    loadi %3, $end
-    jmp %3
+    halt
 
 msg_data:
     #d "Hello, world!\0"
