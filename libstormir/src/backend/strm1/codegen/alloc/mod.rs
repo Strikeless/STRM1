@@ -1,3 +1,21 @@
+///
+/// The names "alloc" and "prealloc" really aren't all that describing.
+///
+/// Prealloc (other module) turns stormir LIR into it's own near-machine-code IR, and is where the actual code
+/// generation happens, besides for register and memory allocation, which is handed over to the alloc module once
+/// we know approximately what code to generate.
+///
+/// Alloc (this module) turns the near-machine-code IR produced by prealloc into actual machine code and is where the
+/// actual register and memory allocation happens. It takes the IR from the prealloc module and translates the generic
+/// variable operations into operations working on registers and memory understood by the target machine.
+///
+/// Thanks to this split:
+/// +   Register allocation becomes easier, since we can delay it to a point where most of the code generation has been
+///     done already, thus we already have an approximate idea of variable lifetimes and which registers are free.
+/// +   Code generation becomes easier, since we don't need to deal with raw registers or memory, but the more generic
+///     "variables", and pass the allocation problem to the alloc pass.
+/// -   We get a lot more boilerplate and complexity in the backend.
+///
 use std::collections::HashMap;
 
 use anyhow::{anyhow, Context};
@@ -11,7 +29,7 @@ use varalloc::{
 
 use crate::{
     backend::strm1::codegen::prealloc::{VarId, VarKey},
-    transformer::{extra::Extra, Transformer},
+    transformer::{extra::Extras, Transformer},
 };
 
 use super::prealloc::{
@@ -24,8 +42,8 @@ mod varalloc;
 pub mod tests;
 
 // No reason for alloc extras to be public as the data structures are private.
-const ALLOC_MAP_RMP_EXTRA_KEY: &'static str = "strm1_alloc_map_rmp_extra_key";
-const ALLOC_METADATA_RMP_EXTRA_KEY: &'static str = "strm1_alloc_metadata_rmp_extra_key";
+const EXTRAS_ALLOC_MAP_KEY: &'static str = "strm1_alloc_map";
+const EXTRAS_ALLOC_METADATA_KEY: &'static str = "strm1_alloc_metadata";
 
 lazy_static! {
     static ref INTERNAL_VAR_SPACE: VarIdSpace = VarIdSpace::new();
@@ -55,30 +73,16 @@ impl Transformer for AllocTransformer {
         ),
     ];
 
-    fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>> {
-        let alloc_map_rmp_extra =
-            rmp_serde::to_vec(&self.alloc_map).context("Serializing alloc map for extra")?;
-
-        let alloc_metadata_rmp_extra = rmp_serde::to_vec(&self.alloc_metadata)
-            .context("Serializing alloc metadata for extra")?;
-
-        input
-            .with_extra(&ALLOC_MAP_RMP_EXTRA_KEY, alloc_map_rmp_extra)
-            .with_extra(&ALLOC_METADATA_RMP_EXTRA_KEY, alloc_metadata_rmp_extra)
-            .try_map_data(|lir| {
-                lir.into_iter()
-                    .enumerate()
-                    .map(|(instruction_index, instruction)| {
-                        self.transform_instruction(instruction_index, instruction)
-                    })
-                    .flatten_ok()
-                    .try_collect()
-            })
+    fn transform(&mut self, input: Extras<Self::Input>) -> anyhow::Result<Extras<Self::Output>> {
+        Ok(input
+            .try_map_data(|prealloc_ir| self.transform_prealloc_ir(prealloc_ir))?
+            .with_extra(&EXTRAS_ALLOC_MAP_KEY, &self.alloc_map)
+            .with_extra(&EXTRAS_ALLOC_METADATA_KEY, &self.alloc_metadata))
     }
 }
 
 impl AllocTransformer {
-    fn alloc_prepass(&mut self, input: &Extra<<Self as Transformer>::Input>) -> anyhow::Result<()> {
+    fn alloc_prepass(&mut self, input: &Extras<<Self as Transformer>::Input>) -> anyhow::Result<()> {
         let mut allocator = VarAllocator::new();
 
         for (instruction_index, instruction) in input.data.iter().enumerate() {
@@ -101,8 +105,8 @@ impl AllocTransformer {
                     })?;
 
                     if dest_var.alloc_requirement != AllocRequirement::Register {
-                        // The destination variable could end up in memory, in which case the main pass requires an
-                        // internal register for storing it's memory address, so allocate that here.
+                        // The destination variable is heading towards memory, so the main pass requires an internal
+                        // register for storing it's memory address, allocate that here.
                         let id = VarId(*INTERNAL_VAR_SPACE, instruction_index as u64);
                         allocator.define(id, instruction_index, 0, AllocRequirement::Register)?;
                         allocator.extend_lifetime(&id, instruction_index + 1)?; // The register is only needed for this instruction.
@@ -128,6 +132,20 @@ impl AllocTransformer {
         self.alloc_metadata = allocator.definition_map().clone();
         self.alloc_map = allocator.build()?;
         Ok(())
+    }
+
+    fn transform_prealloc_ir(
+        &mut self,
+        prealloc_ir: Vec<PreallocInstruction>,
+    ) -> anyhow::Result<Vec<TargetInstruction>> {
+        prealloc_ir
+            .into_iter()
+            .enumerate()
+            .map(|(instruction_index, instruction)| {
+                self.transform_instruction(instruction_index, instruction)
+            })
+            .flatten_ok()
+            .try_collect()
     }
 
     fn transform_instruction(

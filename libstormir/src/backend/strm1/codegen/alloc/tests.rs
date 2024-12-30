@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, fs, path::PathBuf};
+use std::{collections::HashMap, fmt::Debug, fs, panic, path::PathBuf};
 
 use anyhow::Context;
 use libemulator::{Emulator, ExecuteOk};
@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     varalloc::{allocator::VarDefinition, AllocMap, MemVarAlloc, RegVarAlloc, VarAlloc},
-    ALLOC_MAP_RMP_EXTRA_KEY, ALLOC_METADATA_RMP_EXTRA_KEY,
+    EXTRAS_ALLOC_MAP_KEY, EXTRAS_ALLOC_METADATA_KEY,
 };
 
 /* Tests implemented in backend root, this is just for the emulator test API, as it uses some private features internally. */
@@ -33,23 +33,15 @@ impl EmulatorTest {
 
         let emulator = Emulator::new(program).context("Error creating emulator")?;
 
-        let alloc_map_rmp = inner
+        let alloc_map = inner
             .compilation_output
-            .extra
-            .get(ALLOC_MAP_RMP_EXTRA_KEY)
-            .context("No alloc map RMP extra in compilation output")?;
+            .extra(EXTRAS_ALLOC_MAP_KEY)
+            .context("No alloc map extra in compilation output")??;
 
-        let alloc_metadata_rmp = inner
+        let alloc_metadata = inner
             .compilation_output
-            .extra
-            .get(ALLOC_METADATA_RMP_EXTRA_KEY)
-            .context("No alloc metadata RMP extra in compilation output")?;
-
-        let alloc_map = rmp_serde::from_slice(&alloc_map_rmp)
-            .context("Error parsing alloc map RMP extra from compilation output")?;
-
-        let alloc_metadata = rmp_serde::from_slice(&alloc_metadata_rmp)
-            .context("Error parsing alloc metadata RMP extra from compilation output")?;
+            .extra(EXTRAS_ALLOC_METADATA_KEY)
+            .context("No alloc metadata extra in compilation output")??;
 
         Ok(Self {
             inner,
@@ -84,7 +76,9 @@ impl EmulatorTest {
             VarAlloc::Register(RegVarAlloc(reg_index)) => {
                 self.emulator.reg_file.get(*reg_index).copied()
             }
-            VarAlloc::Memory(MemVarAlloc(mem_addr)) => self.emulator.memory.word(*mem_addr).as_deref().copied(),
+            VarAlloc::Memory(MemVarAlloc(mem_addr)) => {
+                self.emulator.memory.word(*mem_addr).as_deref().copied()
+            }
         }
     }
 
@@ -123,7 +117,7 @@ impl EmulatorTest {
             .join(self.inner.name);
 
         println!(
-            "Dumping test output to '{}'",
+            "Dumping test output to '{}'.",
             dir_path.to_string_lossy().to_string()
         );
 
@@ -133,7 +127,7 @@ impl EmulatorTest {
         fs::create_dir_all(&dir_path).unwrap();
         fs::write(binary_path, &compilation_output.data).unwrap();
 
-        for (key, value) in &compilation_output.extra {
+        for (key, value) in &compilation_output.extras {
             let path = dir_path.join(format!("extra-{}", key));
             fs::write(path, value).unwrap();
         }

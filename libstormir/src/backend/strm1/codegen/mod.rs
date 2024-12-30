@@ -8,7 +8,7 @@ use prealloc::codegen::PreallocCodegenTransformer;
 use crate::{
     lir::{shim::cmp::CmpShimTransformer, LIRInstruction},
     transformer::{
-        chain::TransformerChainExt, extra::Extra, runner::TransformerRunnerExt, Transformer,
+        chain::TransformerChainExt, extra::Extras, runner::TransformerRunnerExt, Transformer,
     },
 };
 
@@ -24,7 +24,7 @@ impl Transformer for CodegenTransformer {
     type Input = Vec<LIRInstruction>;
     type Output = Vec<TargetInstruction>;
 
-    fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>> {
+    fn transform(&mut self, input: Extras<Self::Input>) -> anyhow::Result<Extras<Self::Output>> {
         (CmpShimTransformer) // Remember to remove if codegen learns all the cmp tricks.
             .chain(PreallocCodegenTransformer {})
             .chain(AllocTransformer::new())

@@ -6,7 +6,7 @@ use libdeassembler::Deassembler;
 use crate::{
     backend::strm1::codegen::prealloc::{RegVarKey, VarId, VarKey},
     lir::{LIRInstruction, LIRValue, LIRVarId},
-    transformer::{extra::Extra, Transformer},
+    transformer::{extra::Extras, Transformer},
 };
 
 use super::{varidspace::VarIdSpace, PreallocInstruction};
@@ -27,7 +27,7 @@ impl Transformer for PreallocCodegenTransformer {
     type Input = Vec<LIRInstruction>;
     type Output = Vec<PreallocInstruction>;
 
-    fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>> {
+    fn transform(&mut self, input: Extras<Self::Input>) -> anyhow::Result<Extras<Self::Output>> {
         input.try_map_data(|lir| {
             lir.into_iter()
                 .enumerate()

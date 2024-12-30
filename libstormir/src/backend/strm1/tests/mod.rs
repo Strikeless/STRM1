@@ -3,7 +3,7 @@ use libisa::instruction::{kind::InstructionKind, Instruction};
 
 use crate::{
     lir::LIRInstruction,
-    transformer::{extra::Extra, runner::TransformerRunnerExt},
+    transformer::{extra::Extras, runner::TransformerRunnerExt},
 };
 
 use super::STRM1Transformer;
@@ -18,7 +18,7 @@ lazy_static! {
 
 pub struct Test {
     pub name: &'static str,
-    pub compilation_output: Extra<Vec<u8>>,
+    pub compilation_output: Extras<Vec<u8>>,
 }
 
 impl Test {

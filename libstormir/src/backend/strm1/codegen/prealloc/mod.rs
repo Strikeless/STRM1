@@ -1,3 +1,21 @@
+///
+/// The names "alloc" and "prealloc" really aren't all that describing.
+///
+/// Prealloc (this module) turns stormir LIR into it's own near-machine-code IR, and is where the actual code
+/// generation happens, besides for register and memory allocation, which is handed over to the alloc module once
+/// we know approximately what code to generate.
+///
+/// Alloc (other module) turns the near-machine-code IR produced by prealloc into actual machine code and is where the
+/// actual register and memory allocation happens. It takes the IR from the prealloc module and translates the generic
+/// variable operations into operations working on registers and memory understood by the target machine.
+///
+/// Thanks to this split:
+/// +   Register allocation becomes easier, since we can delay it to a point where most of the code generation has been
+///     done already, thus we already have an approximate idea of variable lifetimes and which registers are free.
+/// +   Code generation becomes easier, since we don't need to deal with raw registers or memory, but the more generic
+///     "variables", and pass the allocation problem to the alloc pass.
+/// -   We get a lot more boilerplate and complexity in the backend.
+///
 use libisa::{instruction::Instruction as TargetInstruction, Register, Word};
 use serde::{Deserialize, Serialize};
 use varidspace::VarIdSpace;

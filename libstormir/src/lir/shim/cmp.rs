@@ -3,7 +3,7 @@ use itertools::Itertools;
 
 use crate::{
     lir::{self, LIRInstruction},
-    transformer::{extra::Extra, Transformer},
+    transformer::{extra::Extras, Transformer},
 };
 
 /// Shim to replace uses of LIR instructions.
@@ -13,7 +13,7 @@ impl Transformer for CmpShimTransformer {
     type Input = Vec<LIRInstruction>;
     type Output = Vec<LIRInstruction>;
 
-    fn transform(&mut self, input: Extra<Self::Input>) -> anyhow::Result<Extra<Self::Output>> {
+    fn transform(&mut self, input: Extras<Self::Input>) -> anyhow::Result<Extras<Self::Output>> {
         input.try_map_data(|data| {
             // This prepass could be removed even without cloning instructions with a more thought out implementation.
             let replacements = data

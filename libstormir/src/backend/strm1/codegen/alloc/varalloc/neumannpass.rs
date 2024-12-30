@@ -4,7 +4,7 @@ use libisa::Word;
 
 use crate::{
     backend::strm1::codegen::{alloc::AllocTransformer, prealloc::PreallocInstruction},
-    transformer::{extra::Extra, Transformer},
+    transformer::{extra::Extras, Transformer},
 };
 
 use super::VarAlloc;
@@ -12,7 +12,7 @@ use super::VarAlloc;
 impl AllocTransformer {
     pub fn neumann_offset_computation_prepass(
         &mut self,
-        input: &Extra<<Self as Transformer>::Input>,
+        input: &Extras<<Self as Transformer>::Input>,
     ) -> anyhow::Result<()> {
         let code_len = input
             .data
