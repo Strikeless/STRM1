@@ -5,10 +5,11 @@ use thiserror::Error;
 
 use crate::{Immediate, Register, Word};
 
+pub mod assembler;
 pub mod kind;
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
-pub enum InstructionAssemblyError {
+pub enum AssemblyError {
     #[error("Missing immediate")]
     MissingImmediate,
 }
@@ -52,7 +53,7 @@ impl Instruction {
         self
     }
 
-    pub fn assemble(self) -> Result<Vec<u8>, InstructionAssemblyError> {
+    pub fn assemble(self) -> Result<Vec<u8>, AssemblyError> {
         let has_immediate = self.kind.has_immediate();
         let mut output = Vec::with_capacity(if has_immediate {
             crate::BYTES_PER_WORD * 2
@@ -66,9 +67,7 @@ impl Instruction {
         ));
 
         if has_immediate {
-            let immediate = self
-                .immediate
-                .ok_or(InstructionAssemblyError::MissingImmediate)?;
+            let immediate = self.immediate.ok_or(AssemblyError::MissingImmediate)?;
 
             output.extend(crate::word_to_bytes(immediate));
         }
