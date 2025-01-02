@@ -82,7 +82,10 @@ impl Transformer for AllocTransformer {
 }
 
 impl AllocTransformer {
-    fn alloc_prepass(&mut self, input: &Extras<<Self as Transformer>::Input>) -> anyhow::Result<()> {
+    fn alloc_prepass(
+        &mut self,
+        input: &Extras<<Self as Transformer>::Input>,
+    ) -> anyhow::Result<()> {
         let mut allocator = VarAllocator::new();
 
         for (instruction_index, instruction) in input.data.iter().enumerate() {

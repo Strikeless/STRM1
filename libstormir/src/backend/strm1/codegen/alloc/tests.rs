@@ -61,7 +61,9 @@ impl EmulatorTest {
         let var_alloc = self.alloc_map.get(&var_key)?;
         let var_metadata = self.alloc_metadata.get(var_key.id())?;
 
-        // TODO: Utilize emulator tracing to get the variable value.
+        // TODO: Utilize emulator tracing to get the variable value. Need metadata for PC to instruction index
+        //       and instruction index to LIR index?
+
         todo!()
     }
 
@@ -97,15 +99,6 @@ impl EmulatorTest {
 
     pub fn run_till_halt(&mut self) -> anyhow::Result<()> {
         self.run_till(|_, exec_result| exec_result != Some(ExecuteOk::Halted))
-    }
-
-    pub fn run_times(&mut self, times: usize) -> anyhow::Result<()> {
-        let mut counter = 0;
-
-        self.run_till(|_, _| {
-            counter += 1;
-            counter <= times
-        })
     }
 
     pub fn dump_panic<D>(&self, cause: D) -> !

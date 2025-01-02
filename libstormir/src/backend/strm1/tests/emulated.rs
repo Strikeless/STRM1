@@ -44,10 +44,6 @@ fn variable_assignment_ignorant() {
             ));
         }
 
-        if false {
-            return Ok(());
-        }
-
-        Err(anyhow!("success"))
+        return Ok(());
     });
 }

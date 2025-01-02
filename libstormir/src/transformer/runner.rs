@@ -21,7 +21,10 @@ where
         self.run_with_extras(Extras::new(input))
     }
 
-    pub fn run_with_extras(&mut self, input: Extras<T::Input>) -> anyhow::Result<Extras<T::Output>> {
+    pub fn run_with_extras(
+        &mut self,
+        input: Extras<T::Input>,
+    ) -> anyhow::Result<Extras<T::Output>> {
         for (prepass_name, prepass_fn) in T::PREPASSES {
             prepass_fn(&mut self.transformer, &input)
                 .with_context(|| format!("During prepass '{}'", prepass_name))?;
