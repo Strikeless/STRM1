@@ -38,7 +38,9 @@ fn main() {
 }
 
 struct Cli {
+    #[expect(dead_code)] // Not currently used
     args: Args,
+
     emulator: Emulator,
 }
 

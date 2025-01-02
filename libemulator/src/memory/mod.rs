@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{collections::HashMap, marker::PhantomData};
 
 use anyhow::anyhow;
 use libisa::Word;
@@ -15,13 +15,12 @@ mod tests;
 
 pub struct Memory<const SIZE_BYTES: usize> {
     store: [u8; SIZE_BYTES],
-    patch_buffer: Vec<MemoryPatch>,
+    patch_buffer: HashMap<Word, MemoryPatch>,
     _address_type_phantom: PhantomData<Word>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MemoryPatch {
-    pub addr: Word,
     pub new_value: u8,
 }
 
@@ -29,7 +28,7 @@ impl<const SIZE_BYTES: usize> Memory<SIZE_BYTES> {
     pub fn new() -> Self {
         Self {
             store: [0; SIZE_BYTES],
-            patch_buffer: Vec::new(),
+            patch_buffer: HashMap::new(),
             _address_type_phantom: PhantomData,
         }
     }
@@ -74,7 +73,7 @@ impl<const SIZE_BYTES: usize> Memory<SIZE_BYTES> {
 
     pub fn word_mut(&mut self, addr: Word) -> Option<MutWordWrapper> {
         let addr_usize = addr as usize;
-        
+
         // windows_mut isn't a thing since that doesn't make sense, do it's work manually.
         let byte_chunk = self
             .store
@@ -82,16 +81,18 @@ impl<const SIZE_BYTES: usize> Memory<SIZE_BYTES> {
             .try_into()
             .unwrap();
 
-        Some(MutWordWrapper::new(byte_chunk, addr, &mut self.patch_buffer))
+        Some(MutWordWrapper::new(
+            byte_chunk,
+            addr,
+            &mut self.patch_buffer,
+        ))
     }
 
     pub fn iter_bytes(&self) -> impl Iterator<Item = &u8> {
         self.store.iter()
     }
 
-    pub fn iter_words(
-        &self,
-    ) -> impl Iterator<Item = WordWrapper> + use<'_, SIZE_BYTES> {
+    pub fn iter_words(&self) -> impl Iterator<Item = WordWrapper> + use<'_, SIZE_BYTES> {
         self.store
             .array_windows::<{ libisa::BYTES_PER_WORD }>()
             .map(|word_bytes| WordWrapper::new(word_bytes))
@@ -104,8 +105,10 @@ impl<const SIZE_BYTES: usize> Memory<SIZE_BYTES> {
             .array_chunks::<{ libisa::BYTES_PER_WORD }>()
             .map(|word_bytes| WordWrapper::new(word_bytes))
     }
-    
-    pub fn pop_patches(&mut self) -> impl Iterator<Item = MemoryPatch> + use<'_, SIZE_BYTES> {
-        self.patch_buffer.drain(..)
+
+    pub fn pop_patches(
+        &mut self,
+    ) -> impl Iterator<Item = (Word, MemoryPatch)> + use<'_, SIZE_BYTES> {
+        self.patch_buffer.drain()
     }
 }

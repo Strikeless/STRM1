@@ -1,16 +1,19 @@
 #![feature(array_chunks, array_windows)]
 
 mod alu;
-mod memory;
-mod volatilehelper;
 mod execute;
+mod memory;
 mod tracing;
+mod volatilehelper;
 
 use alu::ALU;
 use anyhow::Context;
-use libisa::{instruction::{Instruction, InstructionDeassemblyError}, Word};
-use thiserror::Error;
+use libisa::{
+    instruction::{Instruction, InstructionDeassemblyError},
+    Word,
+};
 use memory::{word::WordWrapper, Memory};
+use thiserror::Error;
 use tracing::{EmulatorIterationTrace, EmulatorTracing};
 
 pub struct Emulator {
@@ -40,13 +43,12 @@ pub enum ExecuteErr {
 impl Emulator {
     pub fn new(program: Vec<u8>) -> anyhow::Result<Self> {
         Ok(Self {
-            memory: Memory::new_with_data(program)
-                .with_context(|| "Loading program to memory")?,
+            memory: Memory::new_with_data(program).with_context(|| "Loading program to memory")?,
 
             reg_file: [0; libisa::REGISTER_COUNT],
             alu: ALU::new(),
             pc: 0,
-            tracing: EmulatorTracing::default()
+            tracing: EmulatorTracing::default(),
         })
     }
 
@@ -65,10 +67,9 @@ impl Emulator {
         let instruction = self.parse_next_instruction()?;
         let exec_result = self.execute_parsed_instruction(instruction);
 
-        let memory_patches: Vec<_> = self.memory.pop_patches().collect();
-        self.tracing.add_iteration_trace(instruction_pc, EmulatorIterationTrace {
-            memory_patches,
-        });
+        let memory_patches = self.memory.pop_patches().collect();
+        self.tracing
+            .add_iteration_trace(instruction_pc, EmulatorIterationTrace { memory_patches });
 
         exec_result
     }
@@ -89,7 +90,9 @@ impl Emulator {
 
     fn pc_next(&mut self) -> Result<WordWrapper, ExecuteErr> {
         let pc_word = self.mem_word_or_err(self.pc)?;
-        self.pc = self.pc.wrapping_add_signed(libisa::BYTES_PER_WORD as libisa::WordSigned);
+        self.pc = self
+            .pc
+            .wrapping_add_signed(libisa::BYTES_PER_WORD as libisa::WordSigned);
         Ok(pc_word)
     }
 }

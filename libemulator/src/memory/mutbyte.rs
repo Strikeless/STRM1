@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 use libisa::Word;
 
@@ -8,12 +11,16 @@ pub struct MutByteWrapper<'a> {
     inner: &'a mut u8,
     addr: Word,
 
-    patch_buffer: &'a mut Vec<MemoryPatch>,
+    patch_buffer: &'a mut HashMap<Word, MemoryPatch>,
     original_value: u8,
 }
 
 impl<'a> MutByteWrapper<'a> {
-    pub(super) fn new(inner: &'a mut u8, addr: Word, patch_buffer: &'a mut Vec<MemoryPatch>) -> Self {
+    pub(super) fn new(
+        inner: &'a mut u8,
+        addr: Word,
+        patch_buffer: &'a mut HashMap<Word, MemoryPatch>,
+    ) -> Self {
         Self {
             original_value: *inner,
             inner,
@@ -40,10 +47,11 @@ impl DerefMut for MutByteWrapper<'_> {
 impl Drop for MutByteWrapper<'_> {
     fn drop(&mut self) {
         if *self.inner != self.original_value {
-            self.patch_buffer.push(MemoryPatch {
-                addr: self.addr,
+            let patch = MemoryPatch {
                 new_value: *self.inner,
-            });
+            };
+
+            self.patch_buffer.insert(self.addr, patch);
         }
     }
 }

@@ -1,4 +1,7 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 use libisa::Word;
 
@@ -8,7 +11,7 @@ pub struct MutWordWrapper<'a> {
     source: &'a mut [u8; libisa::BYTES_PER_WORD],
     addr: Word,
 
-    patch_buffer: &'a mut Vec<MemoryPatch>,
+    patch_buffer: &'a mut HashMap<Word, MemoryPatch>,
 
     // We must have a copy of the word value here, the borrow checker guarantees that this won't cause data desync
     // issues here as well. Read the explanation in the non-mut variant WordWrapper.
@@ -18,7 +21,11 @@ pub struct MutWordWrapper<'a> {
 }
 
 impl<'a> MutWordWrapper<'a> {
-    pub fn new(inner: &'a mut [u8; libisa::BYTES_PER_WORD], addr: Word, patch_buffer: &'a mut Vec<MemoryPatch>) -> Self {
+    pub fn new(
+        inner: &'a mut [u8; libisa::BYTES_PER_WORD],
+        addr: Word,
+        patch_buffer: &'a mut HashMap<Word, MemoryPatch>,
+    ) -> Self {
         let original_value = libisa::bytes_to_word(*inner);
 
         Self {
@@ -53,10 +60,9 @@ impl Drop for MutWordWrapper<'_> {
             for (byte_index, byte) in self.source.iter().enumerate() {
                 let byte_addr = self.addr + byte_index as Word;
 
-                self.patch_buffer.push(MemoryPatch {
-                    addr: byte_addr,
-                    new_value: *byte,
-                });
+                let patch = MemoryPatch { new_value: *byte };
+
+                self.patch_buffer.insert(byte_addr, patch);
             }
         }
     }

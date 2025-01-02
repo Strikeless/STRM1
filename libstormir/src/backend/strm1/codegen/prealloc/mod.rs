@@ -1,3 +1,5 @@
+#![expect(dead_code)] // Not all features yet implemented
+
 ///
 /// The names "alloc" and "prealloc" really aren't all that describing.
 ///

@@ -5,8 +5,8 @@ fn word_returns_expected() {
     let expected_word = 0xABCD;
     let word_bytes = libisa::word_to_bytes(expected_word);
 
-    let volatile = Memory::<{ libisa::BYTES_PER_WORD }>::new_with_data(word_bytes)
-        .expect("Creating volatile");
+    let volatile =
+        Memory::<{ libisa::BYTES_PER_WORD }>::new_with_data(word_bytes).expect("Creating volatile");
 
     let actual_word = volatile.word(0).expect("Getting word");
 

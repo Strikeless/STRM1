@@ -1,4 +1,7 @@
-use libisa::{instruction::{kind::InstructionKind, Instruction}, Word};
+use libisa::{
+    instruction::{kind::InstructionKind, Instruction},
+    Word,
+};
 
 use crate::{alu::flags::ALUFlags, Emulator, ExecuteErr, ExecuteOk};
 

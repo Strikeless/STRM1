@@ -1,4 +1,6 @@
-use std::{collections::HashMap, fmt::Debug, fs, panic, path::PathBuf};
+// FIXME: This for sure shouldn't be located in the alloc module, but the codegen or backend root module.
+
+use std::{collections::HashMap, fmt::Debug, fs, ops::Range, panic, path::PathBuf};
 
 use anyhow::Context;
 use libemulator::{Emulator, ExecuteOk};
@@ -7,6 +9,7 @@ use libisa::Word;
 use crate::{
     backend::strm1::{
         codegen::prealloc::{self, VarId, VarKey, VarTrait},
+        machinecode::EXTRAS_INSTRUCTION_TO_BYTE_INDEX_MAP_KEY,
         tests::Test,
     },
     lir::LIRVarId,
@@ -25,6 +28,8 @@ pub struct EmulatorTest {
 
     alloc_map: AllocMap,
     alloc_metadata: HashMap<VarId, VarDefinition>,
+
+    target_index_to_byte_indices: HashMap<usize, Range<Word>>,
 }
 
 impl EmulatorTest {
@@ -43,11 +48,17 @@ impl EmulatorTest {
             .extra(EXTRAS_ALLOC_METADATA_KEY)
             .context("No alloc metadata extra in compilation output")??;
 
+        let target_index_to_byte_indices = inner
+            .compilation_output
+            .extra(EXTRAS_INSTRUCTION_TO_BYTE_INDEX_MAP_KEY)
+            .context("No byte to target index in compilation output")??;
+
         Ok(Self {
             inner,
             emulator,
             alloc_map,
             alloc_metadata,
+            target_index_to_byte_indices,
         })
     }
 
@@ -61,10 +72,23 @@ impl EmulatorTest {
         let var_alloc = self.alloc_map.get(&var_key)?;
         let var_metadata = self.alloc_metadata.get(var_key.id())?;
 
-        // TODO: Utilize emulator tracing to get the variable value. Need metadata for PC to instruction index
-        //       and instruction index to LIR index?
+        let var_alive_lir_index = var_metadata.lifetime.end;
 
-        todo!()
+        let var_alive_target_index = todo!(); // TODO(next): LIR index to target instruction index mapping.
+
+        let var_alive_byte_index = self
+            .target_index_to_byte_indices
+            .get(var_alive_target_index)
+            .expect("Target index not in byte index mapping!")
+            .start;
+
+        match *var_alloc {
+            VarAlloc::Memory(MemVarAlloc(mem_addr)) => self
+                .emulator
+                .tracing
+                .memory_word_by_pc(var_alive_byte_index, mem_addr),
+            VarAlloc::Register(RegVarAlloc(reg_index)) => todo!(), // TODO
+        }
     }
 
     /// Get the current value of the data cell the given LIR variable refers to.
