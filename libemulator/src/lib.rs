@@ -1,8 +1,8 @@
-#![feature(array_chunks, array_windows)]
+#![feature(array_chunks, array_windows, trait_alias)]
 
 mod alu;
 mod execute;
-mod memory;
+mod volatile;
 mod tracing;
 mod volatilehelper;
 
@@ -12,17 +12,17 @@ use libisa::{
     instruction::{Instruction, InstructionDeassemblyError},
     Word,
 };
-use memory::{word::WordWrapper, Memory};
 use thiserror::Error;
 use tracing::{EmulatorIterationTrace, EmulatorTracing};
+use volatile::Volatile;
 
 pub struct Emulator {
-    pub memory: Memory<{ Word::MAX as usize }>,
-    pub reg_file: [Word; libisa::REGISTER_COUNT],
+    pub memory: Volatile<u8, Word>,
+    pub reg_file: Volatile<Word, usize>,
+    pub tracing: EmulatorTracing,
+
     pub alu: ALU,
     pub pc: Word,
-
-    pub tracing: EmulatorTracing,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,12 +43,15 @@ pub enum ExecuteErr {
 impl Emulator {
     pub fn new(program: Vec<u8>) -> anyhow::Result<Self> {
         Ok(Self {
-            memory: Memory::new_with_data(program).with_context(|| "Loading program to memory")?,
+            memory: Volatile::new_with_data(program, Word::MAX)
+                .with_context(|| "Loading program to memory")?,
 
-            reg_file: [0; libisa::REGISTER_COUNT],
+            reg_file: Volatile::new(libisa::REGISTER_COUNT),
+
+            tracing: EmulatorTracing::default(),
+
             alu: ALU::new(),
             pc: 0,
-            tracing: EmulatorTracing::default(),
         })
     }
 
@@ -68,31 +71,37 @@ impl Emulator {
         let exec_result = self.execute_parsed_instruction(instruction);
 
         let memory_patches = self.memory.pop_patches().collect();
-        self.tracing
-            .add_iteration_trace(instruction_pc, EmulatorIterationTrace { memory_patches });
+        let register_patches = self.reg_file.pop_patches().collect();
+
+        self.tracing.add_iteration_trace(instruction_pc, EmulatorIterationTrace {
+            memory_patches,
+            register_patches,
+        });
 
         exec_result
     }
 
     fn parse_next_instruction(&mut self) -> Result<Instruction, ExecuteErr> {
-        let instruction_word = *self.pc_next()?;
+        let instruction_word = self.pc_next()?;
 
         let mut instruction = Instruction::deassemble_instruction_word(instruction_word)
             .map_err(|e| ExecuteErr::IllegalInstruction(e))?;
 
         if instruction.kind.has_immediate() {
-            let immediate_word = *self.pc_next()?;
+            let immediate_word = self.pc_next()?;
             instruction.immediate = Some(immediate_word);
         }
 
         Ok(instruction)
     }
 
-    fn pc_next(&mut self) -> Result<WordWrapper, ExecuteErr> {
+    fn pc_next(&mut self) -> Result<Word, ExecuteErr> {
         let pc_word = self.mem_word_or_err(self.pc)?;
+
         self.pc = self
             .pc
             .wrapping_add_signed(libisa::BYTES_PER_WORD as libisa::WordSigned);
-        Ok(pc_word)
+
+        Ok(*pc_word)
     }
 }

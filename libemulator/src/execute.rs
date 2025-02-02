@@ -3,7 +3,7 @@ use libisa::{
     Word,
 };
 
-use crate::{alu::flags::ALUFlags, Emulator, ExecuteErr, ExecuteOk};
+use crate::{alu::flags::ALUFlags, volatile::mutcell::VolatileMutCell, Emulator, ExecuteErr, ExecuteOk};
 
 impl Emulator {
     pub fn execute_parsed_instruction(
@@ -14,7 +14,7 @@ impl Emulator {
             InstructionKind::Nop => {}
 
             InstructionKind::LoadI => {
-                let dest = self.reg_a_mut(&instruction);
+                let mut dest = self.reg_a_mut(&instruction);
                 let value = instruction.immediate.unwrap();
 
                 *dest = value;
@@ -24,7 +24,7 @@ impl Emulator {
                 let src_addr = *self.reg_b(&instruction);
                 let src_value = *self.mem_word_or_err(src_addr)?;
 
-                let dest = self.reg_a_mut(&instruction);
+                let mut dest = self.reg_a_mut(&instruction);
                 *dest = src_value;
             }
 
@@ -38,7 +38,7 @@ impl Emulator {
 
             InstructionKind::Cpy => {
                 let src = *self.reg_b(&instruction);
-                let dest = self.reg_a_mut(&instruction);
+                let mut dest = self.reg_a_mut(&instruction);
                 *dest = src;
             }
 
@@ -105,7 +105,7 @@ impl Emulator {
                 let src_addr = *self.reg_b(&instruction);
                 let src_value = *self.mem_byte_or_err(src_addr)?;
 
-                let dest = self.reg_a_mut(&instruction);
+                let mut dest = self.reg_a_mut(&instruction);
                 *dest = ((src_value as u16) << 8) | (*dest & 0x00FF);
             }
 
@@ -113,7 +113,7 @@ impl Emulator {
                 let src_addr = *self.reg_b(&instruction);
                 let src_value = *self.mem_byte_or_err(src_addr)?;
 
-                let dest = self.reg_a_mut(&instruction);
+                let mut dest = self.reg_a_mut(&instruction);
                 *dest = (*dest & 0xFF00) | (src_value as u16)
             }
 
@@ -145,7 +145,7 @@ impl Emulator {
         self.reg_word(instruction.reg_a.unwrap())
     }
 
-    fn reg_a_mut(&mut self, instruction: &Instruction) -> &mut Word {
+    fn reg_a_mut(&mut self, instruction: &Instruction) -> VolatileMutCell<'_, Word, usize> {
         self.reg_word_mut(instruction.reg_a.unwrap())
     }
 

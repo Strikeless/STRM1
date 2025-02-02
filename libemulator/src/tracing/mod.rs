@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use libisa::Word;
+use libisa::{Register, Word};
 
-use crate::memory::MemoryPatch;
+use crate::volatile::patch::VolatilePatch;
 
 #[cfg(test)]
 mod tests;
@@ -19,7 +19,8 @@ pub struct EmulatorTrace {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmulatorIterationTrace {
-    pub memory_patches: HashMap<Word, MemoryPatch>,
+    pub memory_patches: HashMap<Word, VolatilePatch<u8>>,
+    pub register_patches: HashMap<Register, VolatilePatch<Word>>,
 }
 
 impl EmulatorTracing {
@@ -27,27 +28,29 @@ impl EmulatorTracing {
         self.traces_by_pc.get(&pc)
     }
 
-    pub fn memory_byte_by_pc(&self, pc: Word, addr: Word) -> Option<u8> {
-        for possible_patch_pc in (0..pc).rev() {
-            let Some(trace) = self.trace_by_pc(possible_patch_pc) else {
-                continue;
-            };
+    pub fn iterations_by_pc(&self, pc: Word) -> impl Iterator<Item = &EmulatorIterationTrace> + use<'_> {
+        (0..pc) // Iterate over every PC value up to the specified value.
+            .filter_map(|pc| self.trace_by_pc(pc)) // Get traces for the PC values.
+            .flat_map(|trace| &trace.iterations) // Get all the trace iterations.
+    }
 
-            for possible_patch_iteration in trace.iterations.iter().rev() {
-                let Some(patch) = possible_patch_iteration.memory_patches.get(&addr) else {
-                    continue;
-                };
+    pub fn register_by_pc(&self, pc: Word, index: Register) -> Option<&Word> {
+        self.iterations_by_pc(pc) // Get all iteration traces up to the PC.
+            .filter_map(|iter_trace| iter_trace.register_patches.get(&index)) // Filter and map the traces to register patches on the specified register.
+            .map(|memory_patch| &memory_patch.new_value) // Map the patch to the new value it applies.
+            .last() // Get the latest value.
+    }
 
-                return Some(patch.new_value);
-            }
-        }
-
-        None
+    pub fn memory_byte_by_pc(&self, pc: Word, addr: Word) -> Option<&u8> {
+        self.iterations_by_pc(pc) // Get all iteration traces up to the PC.
+            .filter_map(|iter_trace| iter_trace.memory_patches.get(&addr)) // Filter and map the traces to memory patches on the specified register.
+            .map(|memory_patch| &memory_patch.new_value) // Map the patch to the new value it applies.
+            .last() // Get the latest value.
     }
 
     pub fn memory_word_by_pc(&self, pc: Word, addr: Word) -> Option<Word> {
-        let lower_byte = self.memory_byte_by_pc(pc, addr)?;
-        let upper_byte = self.memory_byte_by_pc(pc, addr + 1)?;
+        let lower_byte = *self.memory_byte_by_pc(pc, addr)?;
+        let upper_byte = *self.memory_byte_by_pc(pc, addr + 1)?;
 
         Some(libisa::bytes_to_word([lower_byte, upper_byte]))
     }

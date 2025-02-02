@@ -1,8 +1,7 @@
 use libisa::Word;
 
 use crate::{
-    memory::{mutbyte::MutByteWrapper, mutword::MutWordWrapper, word::WordWrapper},
-    Emulator, ExecuteErr,
+    volatile::{multicell::VolatileMultiCell, mutcell::VolatileMutCell, mutmulticell::VolatileMutMultiCell}, Emulator, ExecuteErr
 };
 
 impl Emulator {
@@ -12,7 +11,7 @@ impl Emulator {
             .expect("Out of bounds register access")
     }
 
-    pub(super) fn reg_word_mut(&mut self, index: usize) -> &mut Word {
+    pub(super) fn reg_word_mut(&mut self, index: usize) -> VolatileMutCell<'_, Word, usize> {
         self.reg_file
             .get_mut(index)
             .expect("Out of bounds register access")
@@ -20,25 +19,25 @@ impl Emulator {
 
     pub(super) fn mem_byte_or_err(&self, addr: Word) -> Result<&u8, ExecuteErr> {
         self.memory
-            .byte(addr)
+            .get(addr)
             .ok_or(ExecuteErr::MemoryAccessViolation(addr))
     }
 
-    pub(super) fn mem_byte_mut_or_err(&mut self, addr: Word) -> Result<MutByteWrapper, ExecuteErr> {
+    pub(super) fn mem_byte_mut_or_err(&mut self, addr: Word) -> Result<VolatileMutCell<'_, u8, Word>, ExecuteErr> {
         self.memory
-            .byte_mut(addr)
+            .get_mut(addr)
             .ok_or(ExecuteErr::MemoryAccessViolation(addr))
     }
 
-    pub(super) fn mem_word_or_err(&self, addr: Word) -> Result<WordWrapper, ExecuteErr> {
+    pub(super) fn mem_word_or_err(&self, addr: Word) -> Result<VolatileMultiCell<Word>, ExecuteErr> {
         self.memory
-            .word(addr)
+            .get_multi(addr)
             .ok_or(ExecuteErr::MemoryAccessViolation(addr))
     }
 
-    pub(super) fn mem_word_mut_or_err(&mut self, addr: Word) -> Result<MutWordWrapper, ExecuteErr> {
+    pub(super) fn mem_word_mut_or_err(&mut self, addr: Word) -> Result<VolatileMutMultiCell<'_, Word, u8, Word>, ExecuteErr> {
         self.memory
-            .word_mut(addr)
+            .get_mut_multi(addr)
             .ok_or(ExecuteErr::MemoryAccessViolation(addr))
     }
 }
