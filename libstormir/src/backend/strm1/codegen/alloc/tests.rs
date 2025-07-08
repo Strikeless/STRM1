@@ -74,9 +74,9 @@ impl EmulatorTest {
 
         let var_alive_lir_index = var_metadata.lifetime.end;
 
-        let var_alive_target_index = todo!(); // TODO(next): LIR index to target instruction index mapping.
+        let var_alive_target_index = todo!(); // TODO: LIR index to target instruction index mapping.
 
-        let var_alive_byte_index = self
+        let var_alive_pc_index = self
             .target_index_to_byte_indices
             .get(var_alive_target_index)
             .expect("Target index not in byte index mapping!")
@@ -86,8 +86,12 @@ impl EmulatorTest {
             VarAlloc::Memory(MemVarAlloc(mem_addr)) => self
                 .emulator
                 .tracing
-                .memory_word_by_pc(var_alive_byte_index, mem_addr),
-            VarAlloc::Register(RegVarAlloc(reg_index)) => todo!(), // TODO
+                .memory_word_by_pc(var_alive_pc_index, mem_addr),
+
+            VarAlloc::Register(RegVarAlloc(reg_index)) => self
+                .emulator
+                .tracing
+                .register_by_pc(var_alive_pc_index, reg_index),
         }
     }
 
@@ -103,7 +107,7 @@ impl EmulatorTest {
                 self.emulator.reg_file.get(*reg_index).copied()
             }
             VarAlloc::Memory(MemVarAlloc(mem_addr)) => {
-                self.emulator.memory.word(*mem_addr).as_deref().copied()
+                self.emulator.memory.get_multi(*mem_addr).as_deref().copied()
             }
         }
     }

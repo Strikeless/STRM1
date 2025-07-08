@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range};
 
 use anyhow::anyhow;
 use itertools::Itertools;
-use libisa::Word;
+use libisa::{Register, Word};
 use serde::{Deserialize, Serialize};
 
 use crate::backend::strm1::codegen::prealloc::VarId;
@@ -19,8 +19,8 @@ pub enum AllocRequirement {
     #[default]
     Generic,
 
-    Register,
-    Memory,
+    Register(Option<Register>),
+    Memory(Option<Word>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -94,6 +94,10 @@ impl VarAllocator {
     pub fn get_definition(&self, id: &VarId) -> Option<&VarDefinition> {
         self.definitions.get(id)
     }
+
+    pub fn get_definition_mut(&mut self, id: &VarId) -> Option<&mut VarDefinition> {
+        self.definitions.get_mut(id)
+    }
 }
 
 struct InnerBuilder {
@@ -118,9 +122,9 @@ impl InnerBuilder {
         // ...then by allocation requirements, prioritizing register and de-prioritizing memory requirements.
         // NOTE: This must be the last sort to guarantee allocation requirements are met whenever possible.
         id_vars.sort_by_key(|(_, definition)| match definition.alloc_requirement {
-            AllocRequirement::Register => 0,
+            AllocRequirement::Register(..) => 0,
             AllocRequirement::Generic => 1,
-            AllocRequirement::Memory => 2,
+            AllocRequirement::Memory(..) => 2,
         });
 
         let inner_alloc_map = id_vars
@@ -133,30 +137,44 @@ impl InnerBuilder {
 
     fn allocate_var(&mut self, definition: VarDefinition) -> anyhow::Result<VarAlloc> {
         match definition.alloc_requirement {
-            AllocRequirement::Register => self
-                .allocate_reg(definition.lifetime)
+            AllocRequirement::Register(maybe_explicit_index) => self
+                .allocate_reg(definition.lifetime, maybe_explicit_index)
                 .ok_or_else(|| anyhow!("Out of free registers on forced register allocation")),
 
-            AllocRequirement::Memory => self
-                .allocate_mem(definition.lifetime)
+            AllocRequirement::Memory(maybe_explicit_addr) => self
+                .allocate_mem(definition.lifetime, maybe_explicit_addr)
                 .ok_or_else(|| anyhow!("Out of free memory on forced memory allocation")),
 
             AllocRequirement::Generic => self
-                .allocate_reg(definition.lifetime.clone())
-                .or_else(|| self.allocate_mem(definition.lifetime))
+                .allocate_reg(definition.lifetime.clone(), None)
+                .or_else(|| self.allocate_mem(definition.lifetime, None))
                 .ok_or_else(|| anyhow!("Out of space for variable allocation")),
         }
     }
 
-    fn allocate_reg(&mut self, lifetime: Range<usize>) -> Option<VarAlloc> {
-        self.reg_usage_map
-            .reserve_free(lifetime)
-            .map(|reg_index| VarAlloc::Register(RegVarAlloc(reg_index)))
+    fn allocate_reg(&mut self, lifetime: Range<usize>, explicit_index: Option<Register>) -> Option<VarAlloc> {
+        let allocated_index = if let Some(explicit_index) = explicit_index {
+            // TODO: We must figure out how to prevent auto allocations from taking these explicit indices!
+            //       Right now this'll just panic if an overlap occurs.
+            self.reg_usage_map.reserve(explicit_index, lifetime);
+            Some(explicit_index)
+        } else {
+            self.reg_usage_map.reserve_free(lifetime)
+        };
+
+        allocated_index.map(|reg_index| VarAlloc::Register(RegVarAlloc(reg_index)))
     }
 
-    fn allocate_mem(&mut self, lifetime: Range<usize>) -> Option<VarAlloc> {
-        self.mem_usage_map
-            .reserve_free(lifetime)
-            .map(|mem_addr| VarAlloc::Memory(MemVarAlloc(mem_addr as Word)))
+    fn allocate_mem(&mut self, lifetime: Range<usize>, explicit_addr: Option<Word>) -> Option<VarAlloc> {
+        let allocated_addr = if let Some(explicit_addr) = explicit_addr {
+            // TODO: As with registers, we must figure out how to prevent auto allocations from taking these explicit indices!
+            self.mem_usage_map.reserve(explicit_addr as usize, lifetime);
+            Some(explicit_addr)
+        } else {
+            self.mem_usage_map.reserve_free(lifetime)
+                .map(|mem_addr_usize| mem_addr_usize as Word)
+        };
+
+        allocated_addr.map(|mem_addr| VarAlloc::Memory(MemVarAlloc(mem_addr)))
     }
 }

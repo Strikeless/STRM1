@@ -92,12 +92,11 @@ impl Cli {
                     .map(|(name, _)| name.replace('"', ""))
                     .collect::<Vec<_>>();
 
+                let registers = self.emulator.reg_file.iter_words().collect::<Vec<_>>();
+
                 info!("PC:          {:05}", self.emulator.pc);
-                info!("Deassembled: {}", self.deassemble_pc_instruction());
-                info!(
-                    "Registers:   {:05?}",
-                    self.emulator.reg_file
-                );
+                info!("Instruction: {}", self.deassemble_pc_instruction());
+                info!("Registers:   {:05?}", registers);
                 info!("ALU flags:   {:?}", set_alu_flags);
             }
 
@@ -107,18 +106,18 @@ impl Cli {
 
                 let words = (addr..addr + len)
                     .step_by(libisa::BYTES_PER_WORD)
-                    .map(|addr| *self.emulator.memory.word(addr).as_deref().unwrap_or(&0))
+                    .map(|addr| *self.emulator.memory.get(addr).as_deref().unwrap_or(&0))
                     .collect::<Vec<_>>();
 
                 let bytes = (addr..addr + len)
-                    .map(|addr| *self.emulator.memory.byte(addr).as_deref().unwrap_or(&0))
+                    .map(|addr| *self.emulator.memory.get(addr).as_deref().unwrap_or(&0))
                     .collect::<Vec<_>>();
 
                 let output = match cmd_args.next()? {
                     "db" | "decb" => format!("{:?}", bytes),
                     "dw" | "decw" => format!("{:?}", words),
-                    "xb" | "hexb" => format!("{:x?}", bytes),
-                    "xw" | "hexw" => format!("{:x?}", words),
+                    "xb" | "hexb" => format!("{:X?}", bytes),
+                    "xw" | "hexw" => format!("{:X?}", words),
                     // No binary because apparently {:b?} wont do for whatever reason.
                     "s" | "utf8" => String::from_utf8_lossy(bytes.as_slice()).to_string(),
                     _ => {
@@ -150,7 +149,7 @@ impl Cli {
         let mut deassembler = Deassembler::new(
             self.emulator
                 .memory
-                .iter_bytes()
+                .iter_words()
                 .skip(self.emulator.pc as usize),
         );
 

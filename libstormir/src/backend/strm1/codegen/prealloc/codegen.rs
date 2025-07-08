@@ -144,14 +144,14 @@ impl PreallocCodegenTransformer {
                         dest: tmp_test_reg_key,
                         src: test_var_key,
                     },
-                    // And the test register with itself to load its flags.
+                    // And the test register with itself to update flags.
                     PreallocInstruction::And(tmp_test_reg_key, tmp_test_reg_key),
                     // Finally jump by the address register if the zero flag was set.
                     PreallocInstruction::JmpZ(tmp_addr_reg_key),
                 ]
             }
 
-            LIRInstruction::BranchEqual { .. } => unimplemented!("Relying on cmp shim"),
+            LIRInstruction::BranchEqual { .. } => unreachable!("Relying on cmp shim"),
 
             LIRInstruction::NativeMachinecode { code } => {
                 let deassembler = Deassembler::new(code.iter());
@@ -199,6 +199,7 @@ impl PreallocCodegenTransformer {
             },
             // Run the operation on the A and B tmp registers and then store the output from the A tmp register.
             op_callback(tmp_a_reg_key, tmp_b_reg_key),
+            PreallocInstruction::DefineVar(out_var_key),
             PreallocInstruction::StoreVar {
                 dest: out_var_key,
                 src: tmp_a_reg_key,

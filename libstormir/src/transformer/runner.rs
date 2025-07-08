@@ -37,14 +37,14 @@ where
 }
 
 pub trait TransformerRunnerExt: Transformer + Sized {
-    fn runner(&mut self) -> TransformerRunner<Self>;
+    fn runner(&'_ mut self) -> TransformerRunner<'_, Self>;
 }
 
 impl<T> TransformerRunnerExt for T
 where
     T: Transformer,
 {
-    fn runner(&mut self) -> TransformerRunner<Self> {
+    fn runner(&'_ mut self) -> TransformerRunner<'_, Self> {
         TransformerRunner::new(self)
     }
 }

@@ -93,8 +93,8 @@ impl AllocTransformer {
                 PreallocInstruction::DefineVar(key) => {
                     let alloc_requirement = match key {
                         VarKey::Generic(..) => AllocRequirement::Generic,
-                        VarKey::Register(..) => AllocRequirement::Register,
-                        VarKey::Memory(..) => AllocRequirement::Memory,
+                        VarKey::Register(..) => AllocRequirement::Register(None),
+                        VarKey::Memory(..) => AllocRequirement::Memory(None),
                     };
 
                     allocator.define(*key.id(), instruction_index, 0, alloc_requirement)?;
@@ -107,17 +107,37 @@ impl AllocTransformer {
                             .context("StoreVar")
                     })?;
 
-                    if dest_var.alloc_requirement != AllocRequirement::Register {
+                    if !matches!(dest_var.alloc_requirement, AllocRequirement::Register(..)) {
                         // The destination variable is heading towards memory, so the main pass requires an internal
                         // register for storing it's memory address, allocate that here.
                         let id = VarId(*INTERNAL_VAR_SPACE, instruction_index as u64);
-                        allocator.define(id, instruction_index, 0, AllocRequirement::Register)?;
+                        allocator.define(id, instruction_index, 0, AllocRequirement::Register(None))?;
                         allocator.extend_lifetime(&id, instruction_index + 1)?; // The register is only needed for this instruction.
                     }
                 }
 
-                PreallocInstruction::ExplicitRegister { .. }
-                | PreallocInstruction::ExplicitMemory { .. } => todo!(), // TODO: Explicit register and memory addresses
+                PreallocInstruction::ExplicitRegister { var, reg_index } => {
+                    let definition = allocator.get_definition_mut(var.id()).ok_or_else(|| {
+                        anyhow!("Undefined variable")
+                            .context("ExplicitRegister")
+                    })?;
+
+                    match &mut definition.alloc_requirement {
+                        AllocRequirement::Register(maybe_explicit_index) => *maybe_explicit_index = Some(*reg_index),
+                        _ => return Err(anyhow!("Not a register allocation").context("ExplicitRegister")),
+                    }
+                }
+                PreallocInstruction::ExplicitMemory { var, mem_addr } => {
+                    let definition = allocator.get_definition_mut(var.id()).ok_or_else(|| {
+                        anyhow!("Undefined variable")
+                            .context("ExplicitMemory")
+                    })?;
+
+                    match &mut definition.alloc_requirement {
+                        AllocRequirement::Memory(maybe_explicit_addr) => *maybe_explicit_addr = Some(*mem_addr),
+                        _ => return Err(anyhow!("Not a memory allocation").context("ExplicitMemory")),
+                    }
+                }
 
                 _ => {}
             }

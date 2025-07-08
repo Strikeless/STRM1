@@ -87,7 +87,7 @@ fn register_alloc_by_requirement() -> anyhow::Result<()> {
         allocator.extend_lifetime(&id, 1)?;
     }
 
-    allocator.define(id, 0, 0, AllocRequirement::Register)?;
+    allocator.define(id, 0, 0, AllocRequirement::Register(None))?;
     allocator.extend_lifetime(&id, 1)?;
 
     let alloc_map = allocator.build()?;
@@ -110,7 +110,7 @@ fn memory_alloc_by_default_fallback() -> anyhow::Result<()> {
     // Try to fill up any free registers with variables that require the registers.
     for i in 0..libisa::REGISTER_COUNT {
         let id = VarId(*INTERNAL_VAR_SPACE, 1 + i as u64);
-        allocator.define(id, 0, 0, AllocRequirement::Register)?;
+        allocator.define(id, 0, 0, AllocRequirement::Register(None))?;
         allocator.extend_lifetime(&id, 1)?;
     }
 

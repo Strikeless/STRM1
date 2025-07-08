@@ -47,3 +47,41 @@ fn variable_assignment_ignorant() {
         return Ok(());
     });
 }
+
+#[test]
+fn add_variables_ignorant() {
+    let program = [
+        LIRInstruction::Const {
+            id: 0,
+            value: LIRValue::Uint16(1),
+        },
+        LIRInstruction::Const {
+            id: 1,
+            value: LIRValue::Uint16(2),
+        },
+        LIRInstruction::Add {
+            id: 2,
+            a: 0,
+            b: 1,
+        },
+        LIR_HALT.clone(),
+    ];
+
+    Test::new("add_variables_ignorant", program).emulate_dump_panicking(|test| {
+        test.run_till_halt()?;
+
+        let var_value = test
+            .get_var_ignorant(2)
+            .context("Variable wasn't found")?;
+
+        if var_value != 1 + 2 {
+            return Err(anyhow!(
+                "Variable value {} differs from expected {}",
+                var_value,
+                1 + 2
+            ));
+        }
+
+        return Ok(());
+    });
+}
